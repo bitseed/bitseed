@@ -1,0 +1,14 @@
+{
+  "index": "Introduction",
+  "generator": "Generator",
+  "about": {
+    "title": "About",
+    "type": "page"
+  },
+  "contact": {
+    "title": "Contact ↗",
+    "type": "page",
+    "href": "https://twitter.com/bitseedpro",
+    "newWindow": true
+  }
+}

@@ -1,0 +1,172 @@
+
+# Bitseed 协议介绍
+
+Bitseed 尝试给 Ordinals 协议提供扩展能力，让 Inscription 更方便的在全链游戏以及自主世界（Autonomous World）中使用。
+
+## 世界源于种子（seed）
+
+我们认为任何游戏世界都可以通过一个生成器（Generator）和一个种子（Seed）来生成。这个种子，由比特币区块的哈希值和交易的哈希值共同构成，确保了每个生成的世界都是独一无二的。我们可以利用 Bitcoin 提供的种子，去生成游戏中的资产，道具，角色，以及世界。
+
+## 生成器工作原理
+
+* 我们定义 generator = G
+* 我们定义 seed = hash(BlockHash, TxHash)
+* 我们定义 Output 为 G 的输出，它可以代表，资产，道具以及世界： Output = G(seed)
+* 要生成多个 Output，可以通过多个 seed 实现： Output1 = G(seed1), Output2 = G(seed2), Output3 = G(seed3), ...
+* 生成器需要编译成 WASM，并提前铭刻在 Bitcoin 上。
+
+## Output 标准
+
+Output 是一种 JSON，它里面包含四个字段：
+
+```json
+{
+    "p":"bitseed",
+    "tick": "myworld",
+    "amt": 1,
+    "attributes: {}
+}
+```
+
+| 属性             | 描述                              | 必须 |
+| --------------- | --------------------------------- | --- |
+| p               | 协议名称，必须为 bitseed             | 是  |
+| tick            | 类型，4~32字符，大小写不敏感          | 是  |
+| amt             | 数量                              | 是  |
+| attributes      | 应用自定义的属性                     | 否  |
+
+这个 JSON 实际上是一种 SFT 的表达方式，这种方式既可以用来表达 FT，也可以用来表达 NFT。
+
+## 协议指令定义
+
+### Deploy
+
+```json
+{
+    "p":"bitseed",
+    "op":"deploy",
+    "tick": "bits",
+    "max": 210000000000,
+    "generator":"/content/$inscription_id",
+}
+
+{
+    "p":"bitseed",
+    "op":"deploy",
+    "tick": "seed",
+    "repeat": 1,
+    "generator":"/content/$inscription_id",
+}
+```
+
+下面的表格列举了 Bitseed 部署指令属性：
+
+| 属性             | 描述                                                   | 必须 |
+| --------------- | ------------------------------------------------------ | --- |
+| p               | 协议名称，必须为 bitseed                                  | 是  |
+| op              | 操作名称，必须为 deploy                                   | 是  |
+| tick            | 类型，4~32字符，大小写不敏感                               | 是  |
+| max             | 最大供应量，整数，默认无上限                                | 否  |
+|repeat          | 允许的重复次数，默认为 0，表示不限制重复                      | 否  |
+|generator       | 生成器的地址，指向另外一个 Inscription                      |是   |
+
+### Mint 操作
+
+Mint 的内容由 generator 程序生成，用户把它铭刻到铭文的 content 字段中。
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 100,
+}
+
+{
+    "p":"bitseed",
+    "tick": "seed",
+    "amt": 1,
+    "attributes": {
+        "seed": "0xabcd"
+    } 
+}
+```
+
+### Transfer 操作
+
+转让 Bitseed 的逻辑遵循 Inscription 的转账机制，Bitseed 协议遵循 Inscription 的 UTXO 追踪机制来实现转让。
+
+### Merge 操作
+
+Bitseed 支持 Merge 操作，如果要把两个 Inscription 合并，只需要把两个 Inscription 的 UTXO 输出到同一个 Output，并再次进行铭刻。
+
+当前有 Bitseed A 
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 100,
+}
+```
+
+Bitseed B
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 200,
+}
+```
+
+A 和 B merge 后，得到
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 300,
+}
+```
+
+Merge 操作的要求：
+
+* A.p == B.p
+* A.tick == B.tick
+* A.attributes == B.attributes
+* C.amt = A.amt + B.amt
+
+### Split 操作
+
+Bitseed 支持 Split 操作，把一个 Inscription 拆分成两个，只需要把原 Inscription 的 UTXO 输出到两个 Output 并分别进行铭刻。
+
+比如把 C split 为 A 和 B，要求：
+
+* C.amt > 1
+* C.amt == A.amt + B.amt
+* A.tick = C.tick
+* B.tick = C.tick
+* A.attributes = C.attributes
+* B.attributes = C.attributes
+
+## 用户 Mint 的流程
+
+* 用户选择自己的一个 UTXO，作为 Input 进行铭刻。
+* 调用对应 tick 的 generator，通过 Input 生成 seed，作为参数传递给 generator，generator 生成 Output。 
+* 将 Output 按照 Inscription 的标准铭刻在 Bitcoin 上，content_type 为 `application/json`。
+
+## Indexer 校验流程
+
+* Indexer 监听 deploy 交易，并提前下载好 generator 程序。
+* 监听 Mint 交易，重新执行 generator 校验用户铭刻的内容是否和 generator 匹配。
+* 根据 deploy 的设置，校验总量和重复次数。
+* 校验 Merge 和 Split 交易的合法性。
+
+
+### 通过 ZK 优化 Indexer 校验
+
+* 如果 generator 是可以 ZK 化的，用户 mint 后同时可以铭刻上自己的 zk proof， Indexer 只需要校验 zk proof 即可。
+
+## 应用案例
+
+* bits: Bitseed 协议的第一个 FT，它每次 mint 获取的数量根据 seed 随机， generator = random(seed,[1000,10000])。
+* seed: Bitseed 协议的第一个文本 NFT，它直接将 seed 作为 attributes 输出。

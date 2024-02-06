@@ -1,0 +1,14 @@
+{
+  "index": "介绍",
+  "generator": "生成器",
+  "about": {
+    "title": "关于",
+    "type": "page"
+  },
+  "contact": {
+    "title": "联系 ↗",
+    "type": "page",
+    "href": "https://twitter.com/bitseedpro",
+    "newWindow": true
+  }
+}
