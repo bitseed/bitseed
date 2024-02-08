@@ -1,0 +1,119 @@
+# 协议操作
+
+
+在Bitseed协议中，定义了一系列操作，以确保在区块链上高效且一致地管理和转移资产。以下是这些操作的详细技术表述：
+
+## Deploy操作
+
+Deploy操作负责初始化并部署新的资产类型或游戏世界，在区块链上铭刻特定的生成器元数据，指定如何生成和限制资产。包括生成器的位置标识符（例如，一个指向Inscription的URI）、最大供应量（max），以及允许的重复生成次数（repeat）。
+
+下面是两个部署Bitseed资产的例子：
+
+```json
+{
+    "p":"bitseed",
+    "op":"deploy",
+    "tick": "bits",
+    "max": 210000000000,
+    "generator":"/content/$inscription_id",
+}
+
+{
+    "p":"bitseed",
+    "op":"deploy",
+    "tick": "seed",
+    "repeat": 1,
+    "generator":"/content/$inscription_id",
+}
+```
+
+下面的表格列举了 Bitseed 部署指令属性：
+
+| 属性             | 描述                                                   | 必须 |
+| --------------- | ------------------------------------------------------ | --- |
+| p               | 协议名称，必须为 bitseed                                  | 是  |
+| op              | 操作名称，必须为 deploy                                   | 是  |
+| tick            | 类型，4~32字符，大小写不敏感                               | 是  |
+| max             | 最大供应量，整数，默认无上限                                | 否  |
+|repeat          | 允许的重复次数，默认为 0，表示不限制重复                      | 否  |
+|generator       | 生成器的地址，指向另外一个 Inscription                      |是   |
+
+## Mint操作
+
+Mint 的内容由 generator 程序生成，用户把它铭刻到铭文的 content 字段中，并设置相应的content_type标识符为`application/json`。
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 100,
+}
+
+{
+    "p":"bitseed",
+    "tick": "seed",
+    "amt": 1,
+    "attributes": {
+        "seed": "0xabcd"
+    } 
+}
+```
+
+## Transfer操作
+
+Transfer操作遵循Inscription协议的UTXO跟踪模型，支持将Bitseed资产从一个地址转移到另一个地址。
+   
+## Merge操作
+
+Merge操作允许两个相同类型的Bitseed资产合并为单一资产。要求合并的资产（A、B）具有相同的协议标识（p）、资产类型（tick）、以及属性（attributes）。新的合并资产（C）的数量（amt）是原始资产数量的总和。
+Merge操作需要将两个原始Inscription的UTXO输出到同一个Output，并再次进行铭刻。
+
+```text
+A.p == B.p
+A.tick == B.tick
+A.attributes == B.attributes
+C.amt = A.amt + B.amt
+```
+
+比如当前有 Bitseed A 
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 100,
+}
+```
+
+Bitseed B
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 200,
+}
+```
+
+A 和 B merge 后，得到
+
+```json
+{
+    "p":"bitseed",
+    "tick": "bits",
+    "amt": 300,
+}
+```
+
+## Split操作
+
+Split操作使得一个Bitseed资产可以分裂为多个独立的资产。原始资产（C）被分裂成两个或多个资产（A、B），其属性保持不变，而数量根据分裂规则进行分配。
+Split操作需要将原始Inscription的UTXO输出到两个Output，并分别进行铭刻。    
+
+```text
+C.amt > 1
+C.amt == A.amt + B.amt
+A.tick = C.tick
+B.tick = C.tick
+A.attributes = C.attributes
+B.attributes = C.attributes
+```

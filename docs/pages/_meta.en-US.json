@@ -1,6 +1,7 @@
 {
   "index": "Introduction",
   "generator": "Generator",
+  "protocol_operation": "Protocl operation",
   "about": {
     "title": "About",
     "type": "page"

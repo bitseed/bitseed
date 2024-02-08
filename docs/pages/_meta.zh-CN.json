@@ -1,6 +1,7 @@
 {
   "index": "介绍",
   "generator": "生成器",
+  "protocol_operation": "协议操作",
   "about": {
     "title": "关于",
     "type": "page"
