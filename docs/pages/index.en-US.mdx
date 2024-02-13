@@ -1,7 +1,42 @@
-# Bitseed protocol introduction
+# Introduction to Bitseed Protocol
 
-Bitseed aims to extend the capabilities of the Ordinals protocol, making Inscription more conveniently used in full-chain games and Autonomous Worlds.
+Bitseed aims to extend the capabilities of the Ordinals protocol, making Inscriptions more conveniently applicable in full-chain games and Autonomous Worlds. The Bitseed protocol is inspired by various inscription protocols, including but not limited to BRC20, BRC420, BRC1024, etc., paying homage to the pioneers.
 
 ## The World Originates from a Seed
 
-We believe that any game world can be generated through a Generator and a Seed. This Seed, formed by the hash values of Bitcoin blocks and transactions, ensures that each generated world is unique. We can utilize the Seed provided by Bitcoin to generate assets, props, characters, and worlds in the game.
+We believe that any game world can be generated through a Generator and a Seed. This Seed, constituted by the hash values of Bitcoin blocks and transactions, ensures that each generated world is unique. We can utilize the Seed provided by Bitcoin to generate assets, props, characters, and worlds within the game.
+
+## Generator
+
+The generator provides developers with a universal extension mechanism. Developers can define their own generation rules by writing a generator, making the Bitseed protocol a versatile inscription protocol. For the working principle of the generator, see [Generator](./generator).
+
+## Protocol Operations
+
+The Bitseed protocol's operations for assets include: `Deploy`, `Mint`, `Transfer`, `Merge`, `Split`. For details, see [protocol_operation](./protocol_operation).
+
+## How It Works
+
+### User Operation Process
+
+- Users select one of their UTXOs as the Input for the inscription transaction, which also serves as the Seed for the transaction.
+- Call the generator corresponding to the tick, passing the Seed as a parameter to the generator, which then generates the output.
+- Inscribe the output on Bitcoin following the Inscription standard, with the content_type set to `application/json`.
+
+### Indexer Verification Process
+
+- Indexers listen for deploy transactions and pre-download the generator program.
+- Indexers monitor Mint transactions, re-executing the generator to verify that the content inscribed by the user matches the generator.
+- Validate the total amount and the number of repetitions according to the settings of the deploy.
+- Check the legality of Merge and Split transactions.
+
+### Optimization of Indexer Verification through ZK
+
+If the generator is ZK-proofable, users can inscribe their zk-proof after minting, and the generator only needs to verify the zk-proof.
+
+## Application Cases
+
+- bits: The first fungible token (FT) of the Bitseed protocol, where the amount obtained for each mint is random based on the Seed, `generator = random(seed,[1000,10000])`.
+- seed: The first textual NFT of the Bitseed protocol, which directly outputs the Seed as attributes.
+- A name service based on user input, where the user's input name is output as attributes. By setting the `repeat` parameter to 1 during deployment, the uniqueness of the name is ensured.
+- Whitelist minting based on a Merkle tree, with the root of the Merkle tree provided at the time of user inscription deployment. Users need to provide Merkle proof when minting, and the generator can verify the Merkle proof.
+- PoW-based minting, where users need to calculate the PoW result according to the difficulty setting at deployment, and the generator verifies the PoW result.
