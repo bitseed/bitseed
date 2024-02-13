@@ -36,5 +36,8 @@ Bitseed 协议对资产的操作包括：`Deploy`，`Mint`，`Transfer`， `Merg
 
 ## 应用案例
 
-* bits: Bitseed 协议的第一个 FT，它每次 mint 获取的数量根据 seed 随机， generator = random(seed,[1000,10000])。
+* bits: Bitseed 协议的第一个 FT，它每次 mint 获取的数量根据 seed 随机， `generator = random(seed,[1000,10000])`。
 * seed: Bitseed 协议的第一个文本 NFT，它直接将 seed 作为 attributes 输出。
+* 基于用户输入的名字服务，用户输入名字，名字作为 attributes 输出，通过设置部署时的 `repeat` 参数为 1，保证名字唯一。
+* 基于 Merkle tree 的白名单 mint，Merkle tree 的 root 在用户铭文部署时提供，用户 mint 时需要提供 Merkle proof，生成器校验 Merkle proof 即可。
+* 基于 PoW 的 mint，用户 mint 时需要根据部署时的难度设置，计算 PoW 结果，生成器校验 PoW 结果即可。

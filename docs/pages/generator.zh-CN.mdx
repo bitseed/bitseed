@@ -13,23 +13,44 @@
 
 生成器的 WASM 需要对外提供一组标准的 API 接口，以便于铭文索引器在执行时调用。下面的接口用 Rust 表达，实际的 WASM 接口需要和 Bitseed JavaScript SDK 中的接口保持一致。
 
-生成器需要提供两个方法，分别用于铭刻时的生成和链下索引时的生成：
+生成器需要提供两个 `generate` 方法，分别用于铭刻时的生成和链下索引时的生成：
 
 ```rust
-fn inscribe_generate(seed: Vec<u8>, user_input: Vec<u8>) -> Vec<u8>;
+fn inscribe_generate(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String) -> String;
+fn inscribe_verify(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String, output: String) -> bool;
 fn has_indexer_generate() -> bool;
-fn indexer_generate(inscription_id: Vec<u8>) -> Vec<u8>;
+fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String;
 ```
 
 ### inscribe_generate
 
 `inscribe_generate` 方法用于铭刻时的生成，它的输出结果将被写入区块链中。
-`seed` 参数是种子，`user_input` 参数是用户输入，`inscribe_generate` 方法的返回值是铭文的 JSON 内容。
+
+* `deploy_args`: 部署时提供的静态参数列表。
+* `seed`: 种子，基于铭刻交易的第一个 UTXO 输入计算获得。
+* `user_input`: 用户输入，只有部署设置的 `has_user_input` 为 true 时才会有值。
+* 返回值: 铭文的 JSON 内容。
+
+### inscribe_verify
+
+`inscribe_verify` 方法用于铭刻结果的验证，索引器会调用它来验证铭文的正确性。
+
+* `deploy_args`: 部署时提供的静态参数列表。
+* `seed`: 种子，基于铭刻交易的第一个 UTXO 输入计算获得。
+* `user_input`: 用户输入，只有部署设置的 `has_user_input` 为 true 时才会有值。
+* `output`: 铭文的 JSON 内容。
+* 返回值: 验证结果。
+
+一般情况下，`inscribe_verify` 方法的实现和 `inscribe_generate` 方法的实现是一致的，但有时候为了提高效率，可以使用更简单的验证逻辑。比如通过 PoW 铭刻的铭文，可以只验证铭文的哈希难度。
 
 ### indexer_generate
 
 `indexer_generate` 方法用于链下索引时的生成，它的输出结果将被铭文索引器保存，但不会出现在链上。
-`inscription_id` 参数是铭文的 ID，`indexer_generate` 方法的返回值是铭文的额外属性。
+
+* `deploy_args`: 部署时提供的静态参数列表。
+* `inscription_id`: 铭文的 ID
+* 返回值: 铭文的额外属性。
+
 indexer_generate 方法只有在 has_indexer_generate 方法返回 true 时才会被调用。由于它的计算需要等待交易上链生成 `inscription_id`， 用户无法提前计算出它的输出，可以被用在类似开盲盒的场景中。
 
 ## Generator Output 标准
