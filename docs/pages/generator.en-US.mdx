@@ -24,10 +24,10 @@ fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String
 
 ### inscribe_generate
 
-The `inscribe_generate` method is used for generation at the time of inscription, and its output result will be written into the blockchain.
+The `inscribe_generate` method is used for the generation of inscription, and its output result will be written into the blockchain.
 
 * `deploy_args`: List of static parameters provided at the time of deployment.
-* `seed`: The seed, obtained by calculating based on the first UTXO input of the inscription transaction.
+* `seed`: The seed, which is calculated based on the first UTXO input of the inscription transaction.
 * `user_input`: User input, which will have a value only if the deployment setting `has_user_input` is true.
 * Return Value: The JSON content of the inscription.
 
@@ -36,7 +36,7 @@ The `inscribe_generate` method is used for generation at the time of inscription
 The `inscribe_verify` method is used to verify the results of the inscription, and the indexer will call it to verify the correctness of the inscription.
 
 * `deploy_args`: List of static parameters provided at the time of deployment.
-* `seed`: The seed, obtained by calculating based on the first UTXO input of the inscription transaction.
+* `seed`: The seed, which is calculated based on the first UTXO input of the inscription transaction.
 * `user_input`: User input, which will have a value only if the deployment setting `has_user_input` is true.
 * `output`: The JSON content of the inscription.
 * Return Value: The result of the verification.
@@ -53,7 +53,7 @@ The `indexer_generate` method is used for off-chain indexing generation, its out
 
 The `indexer_generate` method will only be called if the `has_indexer_generate` method returns true. Since its computation needs to wait for the transaction to be on-chain to generate the `inscription_id`, users cannot pre-calculate its output, which can be used in scenarios like opening a mystery box.
 
-## Standard for Generator Output
+## Generator Output Standard
 
 The Output is a JSON that contains four fields:
 
