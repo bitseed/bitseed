@@ -1,0 +1,25 @@
+{
+  "name": "bitseed-sdk",
+  "version": "0.1.0",
+  "description": "The bitseed sdk",
+  "main": "index.js",
+  "repository": "https://github.com/bitseed/bitseed",
+  "author": "RoochTeam",
+  "license": "MIT",
+  "private": false,
+  "scripts": {
+    "build": "tsup",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "jest",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.41.2",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.19",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "tsup": "^8.0.2",
+    "typescript": "^5.3.3"
+  }
+}
