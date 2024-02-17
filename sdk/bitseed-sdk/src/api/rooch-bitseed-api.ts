@@ -7,3 +7,4 @@ export class RoochBitSeedApi implements RoochBitSeedApiInterface {
     throw new Error("Method not implemented.");
   }
 }
+
