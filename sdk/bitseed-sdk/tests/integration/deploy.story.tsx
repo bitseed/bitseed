@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
+import bip39 from 'bip39'
 import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Ordit } from "@sadoprotocol/ordit-sdk";
 import { BitSeed, BitSeedApiMock, Generator, InscriptionID, DeployOptions } from '../../src';
 
-const MNEMONIC = "<mnemonic>";
+const MNEMONIC = "seed sock milk update focus rotate barely fade car face mechanic mercy";
 const network = "testnet";
 const datasource = new JsonRpcDatasource({ network });
 const bitseedApiMock = new BitSeedApiMock();
@@ -26,12 +27,15 @@ export default function DeployStory() {
 
     wallet.setDefaultAddress('taproot');
 
+    console.log("wallet address:", wallet.selectedAddress)
     const bitseed = new BitSeed(wallet, datasource, bitseedApiMock);
     setBitseed(bitseed);
   }, []);
 
   const handleDeploy = async () => {
     if (!bitseed) return;
+
+    console.log("handle deploy start")
 
     try {
       let generator: Generator;
@@ -56,6 +60,7 @@ export default function DeployStory() {
       setDeployResult(inscriptionId);
       setError(undefined);
     } catch (e) {
+      console.log("deploy bitseed error:", e)
       setError(e.message);
       setDeployResult(undefined);
     }

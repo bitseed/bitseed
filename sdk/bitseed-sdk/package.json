@@ -11,7 +11,8 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts"
+    "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
+    "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui"
   },
   "devDependencies": {
     "@playwright/experimental-ct-react": "^1.41.2",
@@ -31,6 +32,7 @@
   "dependencies": {
     "@sadoprotocol/ordit-sdk": "^2.3.12",
     "@yubing744/rooch-sdk": "^0.1.0",
-    "commander": "^10.0.0"
+    "commander": "^10.0.0",
+    "bip39": "^3.1.0"
   }
 }

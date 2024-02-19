@@ -6,13 +6,11 @@ import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Inscriber, Ordit } from "@sadoprotocol/ordit-sdk"
 
 export class BitSeed implements APIInterface {
-  private network: string;
   private wallet: Ordit;
   private datasource: JsonRpcDatasource;
   private bitSeedApi: RoochBitSeedApiInterface;
 
   constructor(wallet: Ordit, datasource: JsonRpcDatasource, bitSeedApi: RoochBitSeedApiInterface) {
-    this.network = "testnet"
     this.wallet = wallet;
     this.datasource = datasource;
     this.bitSeedApi = bitSeedApi;
@@ -47,11 +45,13 @@ export class BitSeed implements APIInterface {
       deploy_args: opts?.deploy_args || []
     };
 
+    console.log("deploy meta:", meta)
+
     const transaction = new Inscriber({
-      network: this.network as any,
+      network: this.wallet.network,
       address: this.wallet.selectedAddress,
       publicKey: this.wallet.publicKey,
-      changeAddress: this.wallet.selectedAddress,
+      changeAddress: '',
       destinationAddress: this.wallet.selectedAddress,
       mediaContent: JSON.stringify(meta),
       mediaType: "application/json",
@@ -71,7 +71,7 @@ export class BitSeed implements APIInterface {
 
     // generate deposit address and fee for inscription
     const revealed = await transaction.generateCommit();
-    console.log(revealed) // deposit revealFee to address
+    console.log("revealed:", revealed) // deposit revealFee to address
 
     // confirm if deposit address has been funded
     if (await transaction.isReady()) {
@@ -83,7 +83,9 @@ export class BitSeed implements APIInterface {
 
       // Broadcast transaction
       const tx = await this.datasource.relay({ hex: signedTxHex });
-      console.log(tx);
+      console.log("tx:", tx);
+    } else {
+      console.log("transaction not ready");
     }
 
     return ""
@@ -97,10 +99,10 @@ export class BitSeed implements APIInterface {
     const base64Wasm = Buffer.from(wasmBytes).toString('base64');
 
     const wasmInscription = new Inscriber({
-      network: this.network as any,
+      network: this.wallet.network,
       address: this.wallet.selectedAddress,
       publicKey: this.wallet.publicKey,
-      changeAddress: this.wallet.selectedAddress,
+      changeAddress: '',
       destinationAddress: this.wallet.selectedAddress,
       mediaContent: base64Wasm,
       mediaType: "application/wasm",

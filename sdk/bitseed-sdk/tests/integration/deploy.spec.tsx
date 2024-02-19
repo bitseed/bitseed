@@ -18,6 +18,8 @@ test('Deploy with InscriptionID should call deploy function with correct paramet
   await component.locator('select').selectOption('InscriptionID');
 
   // Input the InscriptionID
+  await component.locator('input[placeholder="Tick"]').fill('move');
+  await component.locator('input[placeholder="Max"]').fill('1000');
   await component.locator('input[placeholder="InscriptionID"]').fill(inscriptionId);
 
   // Click the deploy button
