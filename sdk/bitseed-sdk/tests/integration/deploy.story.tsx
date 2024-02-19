@@ -4,7 +4,6 @@ import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Ordit } from "@sadoprotocol/ordit-sdk";
 import { BitSeed, BitSeedApiMock, Generator, InscriptionID, DeployOptions } from '../../src';
 
-const MNEMONIC = "seed sock milk update focus rotate barely fade car face mechanic mercy";
 const network = "testnet";
 const datasource = new JsonRpcDatasource({ network });
 const bitseedApiMock = new BitSeedApiMock();
@@ -20,15 +19,22 @@ export default function DeployStory() {
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    const wallet = new Ordit({
-      bip39: MNEMONIC,
-      network
+    const primaryWallet = new Ordit({
+      wif: "cNGdjKojxE7nCcYdK34d12cdYTzBdDV4VdXdbpG7SHGTRWuCxpAW",
+      network,
+      type: 'taproot'
     });
 
-    wallet.setDefaultAddress('taproot');
+    const fundingWallet = new Ordit({
+      wif: "cTW1Q2A8AVBuJ1sEBoV9gWokc6e5NYFPHxez6hhriVL2jKH6bfct",
+      network,
+      type: 'taproot'
+    });
 
-    console.log("wallet address:", wallet.selectedAddress)
-    const bitseed = new BitSeed(wallet, datasource, bitseedApiMock);
+    console.log("primary wallet address:", primaryWallet.selectedAddress)
+    console.log("funding wallet address:", fundingWallet.selectedAddress)
+
+    const bitseed = new BitSeed(primaryWallet, fundingWallet, datasource, bitseedApiMock);
     setBitseed(bitseed);
   }, []);
 

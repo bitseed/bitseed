@@ -1449,7 +1449,7 @@ bitcoinjs-lib@6.1.3:
     typeforce "^1.11.3"
     varuint-bitcoin "^1.1.2"
 
-bitcoinjs-lib@^6.1.1:
+bitcoinjs-lib@^6.1.1, bitcoinjs-lib@^6.1.5:
   version "6.1.5"
   resolved "https://registry.npmjs.org/bitcoinjs-lib/-/bitcoinjs-lib-6.1.5.tgz"
   integrity sha512-yuf6xs9QX/E8LWE2aMJPNd0IxGofwfuVOiYdNUESkc+2bHHVKjhJd8qewqapeoolh9fihzHGoDCB5Vkr57RZCQ==

@@ -33,6 +33,7 @@
     "@sadoprotocol/ordit-sdk": "^2.3.12",
     "@yubing744/rooch-sdk": "^0.1.0",
     "commander": "^10.0.0",
-    "bip39": "^3.1.0"
+    "bip39": "^3.1.0",
+    "bitcoinjs-lib": "^6.1.5"
   }
 }
