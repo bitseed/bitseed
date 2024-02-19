@@ -18,31 +18,31 @@ impl InscriptionBuilder {
     }
 
     pub fn op(mut self, op: String) -> Self {
-        self.metadata = self.metadata.add_string("op".to_string(), op);
+        self.metadata = self.metadata.add_string("op", op);
         self
     }
 
-    pub fn tick(mut self, tick: String) -> Self {
-        self.metadata = self.metadata.add_string("tick".to_string(), tick);
+    pub fn tick<S: ToString>(mut self, tick: S) -> Self {
+        self.metadata = self.metadata.add_string("tick", tick.to_string());
         self
     }
 
     pub fn amount(mut self, amount: u64) -> Self {
-        self.metadata = self.metadata.add_u64("amount".to_string(), amount);
+        self.metadata = self.metadata.add_u64("amount", amount);
         self
     }
 
-    pub fn add_metadata(mut self, key: String, value: Value) -> Self {
+    pub fn add_metadata<S: ToString>(mut self, key: S, value: Value) -> Self {
         self.metadata = self.metadata.add(key, value);
         self
     }
 
-    pub fn add_metadata_string(mut self, key: String, value: String) -> Self {
+    pub fn add_metadata_string<S: ToString>(mut self, key: S, value: String) -> Self {
         self.metadata = self.metadata.add_string(key, value);
         self
     }
 
-    pub fn add_metadata_u64(mut self, key: String, value: u64) -> Self {
+    pub fn add_metadata_u64<S: ToString>(mut self, key: S, value: u64) -> Self {
         self.metadata = self.metadata.add_u64(key, value);
         self
     }
@@ -76,29 +76,29 @@ impl MetadataBuilder {
         }
     }
 
-    pub fn add(mut self, key: String, value: Value) -> Self {
+    pub fn add<S: ToString>(mut self, key: S, value: Value) -> Self {
         match &mut self.metadata {
             Value::Map(map) => {
-                map.push((Value::Text(key), value));
+                map.push((Value::Text(key.to_string()), value));
             }
             _ => {}
         }
         self
     }
 
-    pub fn add_string(self, key: String, value: String) -> Self {
+    pub fn add_string<S: ToString>(self, key: S, value: String) -> Self {
         self.add(key, Value::Text(value))
     }
 
-    pub fn add_u64(self, key: String, value: u64) -> Self {
+    pub fn add_u64<S: ToString>(self, key: S, value: u64) -> Self {
         self.add(key, Value::Integer(Integer::from(value)))
     }
 
-    pub fn add_f64(self, key: String, value: f64) -> Self {
+    pub fn add_f64<S: ToString>(self, key: S, value: f64) -> Self {
         self.add(key, Value::Float(value))
     }
 
-    pub fn add_bool(self, key: String, value: bool) -> Self {
+    pub fn add_bool<S: ToString>(self, key: S, value: bool) -> Self {
         self.add(key, Value::Bool(value))
     }
 

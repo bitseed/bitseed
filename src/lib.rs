@@ -6,10 +6,11 @@ pub const PROTOCOL: &str = "bitseed";
 
 pub(crate) mod commands;
 pub mod generator;
+pub mod inscribe;
 pub mod inscription;
 pub mod operation;
-mod ord_client;
 pub mod sft;
+mod wallet;
 
 #[derive(Parser)]
 #[command(name = "bitseed")]

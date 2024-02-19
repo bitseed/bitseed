@@ -20,4 +20,6 @@ serde_json = { version = "1.0.81", features = ["preserve_order"] }
 tiny-keccak = { version = "2", features = ["keccak", "sha3"] }
 anyhow = "1.0.62"
 primitive-types = { version = "0.12.1", features = ["serde", "arbitrary"] }
-ord = { version = "0.15.0", git = "https://github.com/ordinals/ord", rev = "5f9bb3d1c9075f556990ad8292e91573190bb11a"}
+reqwest = { version = "0.11.23", features = ["blocking", "json"] }
+ord = { version = "0.15.0", git = "https://github.com/bitseed/ord", rev = "474dd0c6126323e291735631951081911313fdf6"}
+ordinals = { version = "0.0.2", git = "https://github.com/bitseed/ord", rev = "474dd0c6126323e291735631951081911313fdf6"}
