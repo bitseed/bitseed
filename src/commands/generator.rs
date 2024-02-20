@@ -1,14 +1,17 @@
 use crate::generator;
 use crate::generator::Generator;
 use crate::inscribe::InscribeOptions;
+use crate::inscribe::Inscriber;
 use crate::inscription::InscriptionBuilder;
 use crate::sft::Content;
 use crate::wallet::Wallet;
+use crate::SubcommandResult;
 use anyhow::Result;
 use bitcoin::address::NetworkUnchecked;
 use bitcoin::Address;
 use bitcoin::Amount;
 use bitcoin::OutPoint;
+use bitcoin::Txid;
 use clap::{Parser, Subcommand};
 use ord::Inscription;
 use ord::{FeeRate, InscriptionId};
@@ -26,13 +29,11 @@ pub struct GeneratorCommand {
 }
 
 impl GeneratorCommand {
-    pub fn run(&self, wallet: Wallet) -> Result<String> {
-        //inscription.append_reveal_script_to_builder(builder)
-        //inscription.append
-        // load generator
-        // generate output
-        // mint
-        println!("Mint command run");
-        Ok("".to_string())
+    pub fn run(self, wallet: Wallet) -> SubcommandResult {
+        let output = Inscriber::new(wallet, self.inscribe_options)?
+            .with_generator(self.name, self.generator)?
+            .inscribe()?;
+
+        Ok(Box::new(output))
     }
 }

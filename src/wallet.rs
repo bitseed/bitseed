@@ -131,7 +131,7 @@ impl Wallet {
         Ok(self.get_unspent_outputs()?.contains_key(outpoint))
     }
 
-    pub fn select_utxo(&self) -> Result<OutPoint> {
+    pub fn select_utxo(&self, destination: &Address) -> Result<OutPoint> {
         let utxos = self.get_unspent_outputs()?;
 
         let wallet_inscriptions = self.get_inscriptions()?;
@@ -145,7 +145,7 @@ impl Wallet {
         utxos
             .iter()
             .find(|(outpoint, txout)| {
-                txout.value > 0
+                txout.value > destination.script_pubkey().dust_value().to_sat()
                     && !inscribed_utxos.contains(outpoint)
                     && !locked_utxos.contains(outpoint)
                     && !runic_utxos.contains(outpoint)

@@ -8,3 +8,4 @@ use ord::{Chain, FeeRate, Inscription, InscriptionId};
 
 pub mod generator;
 pub mod mint;
+pub mod deploy;

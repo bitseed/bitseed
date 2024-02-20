@@ -17,7 +17,7 @@ use {
         sighash::{Prevouts, SighashCache, TapSighashType},
         taproot::{ControlBlock, LeafVersion, Signature, TapLeafHash, TaprootBuilder},
         Address, Amount, Network, OutPoint, Script, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
-        Witness,
+        Txid, Witness,
     },
     bitcoincore_rpc::{
         bitcoincore_rpc_json::{ImportDescriptors, SignRawTransactionInput, Timestamp},
@@ -32,6 +32,7 @@ use {
         Chain, Envelope, FeeRate, Inscription, InscriptionId, Target, TransactionBuilder,
     },
     ordinals::SatPoint,
+    serde::{Deserialize, Serialize},
     std::{
         collections::{BTreeMap, BTreeSet},
         path::Path,
@@ -40,7 +41,7 @@ use {
 
 const TARGET_POSTAGE: Amount = Amount::from_sat(10_000);
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Clone, Parser)]
 pub struct InscribeOptions {
     #[arg(
         long,
@@ -85,6 +86,20 @@ impl InscribeOptions {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum InscriptionOrId {
+    Inscription(Inscription),
+    Id(InscriptionId),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InscribeOutput {
+    commit_tx: Txid,
+    reveal_tx: Txid,
+    total_fees: u64,
+    inscription: InscriptionOrId,
+}
+
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
@@ -107,7 +122,7 @@ impl Inscriber {
                 satpoint
             }
             None => {
-                let utxo = wallet.select_utxo()?;
+                let utxo = wallet.select_utxo(&destination)?;
                 SatPoint {
                     outpoint: utxo,
                     offset: 0,
@@ -149,7 +164,7 @@ impl Inscriber {
         mut self,
         tick: String,
         amount: u64,
-        generator: String,
+        generator: InscriptionId,
         repeat: u64,
         deploy_args: Vec<String>,
     ) -> Result<Self> {
@@ -157,7 +172,7 @@ impl Inscriber {
         let deploy_record = DeployRecord {
             tick,
             amount,
-            generator,
+            generator: format!("/inscription/{}", generator),
             repeat,
             deploy_args,
         };
@@ -222,7 +237,7 @@ impl Inscriber {
         Ok(self)
     }
 
-    pub fn inscribe(self) -> Result<(Transaction, Transaction, TweakedKeyPair, u64)> {
+    pub fn inscribe(self) -> Result<InscribeOutput> {
         let mut utxos = self.wallet.get_unspent_outputs()?;
         let mut locked_utxos = self.wallet.get_locked_outputs()?;
         let runic_utxos = self.wallet.get_runic_outputs()?;
@@ -296,7 +311,7 @@ impl Inscriber {
             value: self.option.postage().to_sat(),
         });
 
-        let commit_input = 1;
+        let commit_input = 0;
 
         let (_, reveal_fee) = Self::build_reveal_transaction(
             &control_block,
@@ -307,9 +322,9 @@ impl Inscriber {
             &reveal_script,
         );
 
-        let target = Target::Value(reveal_fee);
+        let target = Target::Value(reveal_fee + Amount::from_sat(total_postage));
 
-        let unsigned_commit_tx = TransactionBuilder::new(
+        let commit_tx = TransactionBuilder::new(
             satpoint,
             wallet_inscriptions,
             utxos.clone(),
@@ -322,7 +337,7 @@ impl Inscriber {
         )
         .build_transaction()?;
 
-        let (vout, _commit_output) = unsigned_commit_tx
+        let (vout, _commit_output) = commit_tx
             .output
             .iter()
             .enumerate()
@@ -330,7 +345,7 @@ impl Inscriber {
             .expect("should find sat commit/inscription output");
 
         reveal_inputs[commit_input] = OutPoint {
-            txid: unsigned_commit_tx.txid(),
+            txid: commit_tx.txid(),
             vout: vout.try_into().unwrap(),
         };
 
@@ -362,7 +377,7 @@ impl Inscriber {
         //     }
         // }
 
-        prevouts.push(unsigned_commit_tx.output[vout].clone());
+        prevouts.push(commit_tx.output[vout].clone());
 
         let mut sighash_cache = SighashCache::new(&mut reveal_tx);
 
@@ -419,14 +434,77 @@ impl Inscriber {
 
         utxos.insert(
             reveal_tx.input[commit_input].previous_output,
-            unsigned_commit_tx.output[reveal_tx.input[commit_input].previous_output.vout as usize]
-                .clone(),
+            commit_tx.output[reveal_tx.input[commit_input].previous_output.vout as usize].clone(),
         );
 
-        let total_fees = Self::calculate_fee(&unsigned_commit_tx, &utxos)
-            + Self::calculate_fee(&reveal_tx, &utxos);
+        let total_fees =
+            Self::calculate_fee(&commit_tx, &utxos) + Self::calculate_fee(&reveal_tx, &utxos);
 
-        Ok((unsigned_commit_tx, reveal_tx, recovery_key_pair, total_fees))
+        if self.option.dry_run {
+            return Ok(InscribeOutput {
+                commit_tx: commit_tx.txid(),
+                reveal_tx: reveal_tx.txid(),
+                total_fees: total_fees,
+                inscription: InscriptionOrId::Inscription(inscription),
+            });
+        }
+
+        let bitcoin_client = self.wallet.bitcoin_client()?;
+
+        let signed_commit_tx = bitcoin_client
+            .sign_raw_transaction_with_wallet(&commit_tx, None, None)?
+            .hex;
+
+        let result = bitcoin_client.sign_raw_transaction_with_wallet(
+            &reveal_tx,
+            Some(
+                &commit_tx
+                    .output
+                    .iter()
+                    .enumerate()
+                    .map(|(vout, output)| SignRawTransactionInput {
+                        txid: commit_tx.txid(),
+                        vout: vout.try_into().unwrap(),
+                        script_pub_key: output.script_pubkey.clone(),
+                        redeem_script: None,
+                        amount: Some(Amount::from_sat(output.value)),
+                    })
+                    .collect::<Vec<SignRawTransactionInput>>(),
+            ),
+            None,
+        )?;
+
+        ensure!(
+            result.complete,
+            format!("Failed to sign reveal transaction: {:?}", result.errors)
+        );
+
+        let signed_reveal_tx = result.hex;
+
+        //   if !self.no_backup {
+        //     Self::backup_recovery_key(wallet, recovery_key_pair)?;
+        //   }
+
+        let commit = bitcoin_client.send_raw_transaction(&signed_commit_tx)?;
+
+        let reveal = match bitcoin_client.send_raw_transaction(&signed_reveal_tx) {
+            Ok(txid) => txid,
+            Err(err) => {
+              return Err(anyhow!(
+              "Failed to send reveal transaction: {err}\nCommit tx {commit} will be recovered once mined"
+            ))
+            }
+          };
+        let inscription_id = InscriptionId {
+            txid: reveal,
+            index: 0,
+        };
+        Ok(InscribeOutput {
+            commit_tx: commit,
+            reveal_tx: reveal,
+            total_fees: total_fees,
+            inscription: InscriptionOrId::Id(inscription_id),
+        })
     }
 
     // fn backup_recovery_key(wallet: &Wallet, recovery_key_pair: TweakedKeyPair) -> Result<()> {
