@@ -22,6 +22,53 @@ export class BitSeed implements APIInterface {
     return "bitseed"
   }
   
+  async storeGenerator(wasmBytes: Uint8Array): Promise<string> {
+    if (!this.primaryWallet.selectedAddress) {
+      throw new Error("not selected address")
+    }
+
+    const base64Wasm = Buffer.from(wasmBytes).toString('base64');
+
+    const wasmInscription = new Inscriber({
+      network: this.primaryWallet.network,
+      address: this.primaryWallet.selectedAddress,
+      publicKey: this.primaryWallet.publicKey,
+      changeAddress: this.primaryWallet.selectedAddress,
+      destinationAddress: this.primaryWallet.selectedAddress,
+      mediaContent: base64Wasm,
+      mediaType: "application/wasm",
+      feeRate: 1,
+      meta: { // Flexible object: Record<string, any>
+        title: "Bitseed simple generator",
+        desc: "A simple BitSeed generator",
+        slug: "cool-digital-artifact",
+        creator: {
+          name: "Rooch Network",
+          X: "https://twitter.com/RoochNetwork",
+          address: this.primaryWallet.selectedAddress
+        }
+      },
+      postage: 600 // base value of the inscription in sats
+    });
+
+    const revealed = await wasmInscription.generateCommit();
+
+    // deposit revealFee to address
+    console.log("revealed:", revealed) 
+    await this.depositRevealFee(revealed)
+
+    if (await wasmInscription.isReady({skipStrictSatsCheck: false})) {
+      await wasmInscription.build();
+
+      const signedTxHex = this.primaryWallet.signPsbt(wasmInscription.toHex(), { isRevealTx: true });
+
+      const wasmTx = await this.datasource.relay({ hex: signedTxHex });
+      return wasmTx as any;
+    } else {
+      throw new Error("WASM Inscription funding is not ready");
+    }
+  }
+
   async deploy(tick: string, max: number, generator: Generator, opts?: DeployOptions | undefined): Promise<string> {
     if (!this.primaryWallet.selectedAddress) {
       throw new Error("not selected address")
@@ -31,9 +78,6 @@ export class BitSeed implements APIInterface {
 
     if (typeof generator === 'string') {
       generatorURI = `/content/${generator}`;
-    } else if (generator instanceof Uint8Array) {
-      const inscriptionID = await this.inscribeWASM(generator, opts);
-      generatorURI = `/content/${inscriptionID}`;
     } else {
       throw new Error("Invalid generator type");
     }
@@ -59,12 +103,12 @@ export class BitSeed implements APIInterface {
       mediaType: "application/json",
       feeRate: 1,
       meta: { // Flexible object: Record<string, any>
-        title: "Example title",
-        desc: "Lorem ipsum",
+        title: "Bitseed tick",
+        desc: `A simple BitSeed tick ${tick}`,
         slug: "cool-digital-artifact",
         creator: {
-          name: "Your Name",
-          email: "artist@example.org",
+          name: "Rooch Network",
+          X: "https://twitter.com/RoochNetwork",
           address: this.primaryWallet.selectedAddress
         }
       },
@@ -93,50 +137,6 @@ export class BitSeed implements APIInterface {
       return txId
     } else {
       throw new Error("transaction not ready");
-    }
-  }
-
-  private async inscribeWASM(wasmBytes: Uint8Array, opts?: DeployOptions): Promise<string> {
-    if (!this.primaryWallet.selectedAddress) {
-      throw new Error("not selected address")
-    }
-
-    const base64Wasm = Buffer.from(wasmBytes).toString('base64');
-
-    const wasmInscription = new Inscriber({
-      network: this.primaryWallet.network,
-      address: this.primaryWallet.selectedAddress,
-      publicKey: this.primaryWallet.publicKey,
-      changeAddress: this.primaryWallet.selectedAddress,
-      destinationAddress: this.primaryWallet.selectedAddress,
-      mediaContent: base64Wasm,
-      mediaType: "application/wasm",
-      feeRate: 1,
-      meta: { // Flexible object: Record<string, any>
-        title: "Example title",
-        desc: "Lorem ipsum",
-        slug: "cool-digital-artifact",
-        creator: {
-          name: "Your Name",
-          email: "artist@example.org",
-          address: this.primaryWallet.selectedAddress
-        }
-      },
-      postage: 600 // base value of the inscription in sats
-    });
-
-    const revealed = await wasmInscription.generateCommit();
-    console.log(revealed) // deposit revealFee to address
-
-    if (await wasmInscription.isReady({skipStrictSatsCheck: true})) {
-      await wasmInscription.build();
-
-      const signedTxHex = this.primaryWallet.signPsbt(wasmInscription.toHex(), { isRevealTx: true });
-
-      const wasmTx = await this.datasource.relay({ hex: signedTxHex });
-      return wasmTx as any;
-    } else {
-      throw new Error("WASM Inscription funding is not ready");
     }
   }
 

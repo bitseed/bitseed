@@ -8,6 +8,7 @@ export interface DeployOptions {
 
 export interface APIInterface {
   name(): string;
+  storeGenerator(content: Uint8Array): Promise<InscriptionID>;
   deploy(tick: string, max: number, generator: Generator, opts?: DeployOptions): Promise<InscriptionID>;
   mint(tick: string, amt: number, attributes?: Map<string, string>): Promise<InscriptionID>;
   merge(a: InscriptionID, b: InscriptionID): Promise<InscriptionID>;
