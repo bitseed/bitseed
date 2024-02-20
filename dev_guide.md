@@ -30,7 +30,7 @@ Start another terminal and run the following commands:
 7. Run `bitcoin-cli generatetoaddress 1 <address>` to mine an inscription
 8. Run `bitseed deploy --fee-rate 1 --generator $the_inscription_from_pre_step --tick bits --amount 210000000000 --deploy-args 1000 --deploy-args 100000`
 9. Run `bitcoin-cli generatetoaddress 1 <address>` to mine  an inscription
-10. Run `bitseed roochpass mint --deploy-inscription-id $the_inscription_from_pre_step --fee-rate 1`
+10. Run `bitseed mint --deploy-inscription-id $the_inscription_from_pre_step --fee-rate 1`
 11. Run `bitcoin-cli generatetoaddress 1 <address>` to mine  an inscription
 12. Run `ord wallet inscriptions` to get the inscriptions
 
