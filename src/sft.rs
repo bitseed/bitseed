@@ -1,8 +1,9 @@
 use crate::operation::{MintRecord, SplitRecord};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use ciborium::Value;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Content {
     pub content_type: String,
     pub body: Vec<u8>,
@@ -12,8 +13,18 @@ impl Content {
     pub fn new(content_type: String, body: Vec<u8>) -> Self {
         Self { content_type, body }
     }
+
     pub fn text(body: String) -> Self {
         Self::new("text/plain".to_string(), body.as_bytes().to_vec())
+    }
+
+    pub fn is_text(&self) -> bool {
+        self.content_type == "text/plain"
+    }
+
+    pub fn as_text(&self) -> Result<String> {
+        ensure!(self.is_text(), "Content is not text");
+        Ok(String::from_utf8(self.body.clone())?)
     }
 }
 
@@ -21,12 +32,17 @@ impl Content {
 pub struct SFT {
     pub tick: String,
     pub amount: u64,
-    pub attributes: Value,
+    pub attributes: Option<Value>,
     pub content: Option<Content>,
 }
 
 impl SFT {
-    pub fn new(tick: String, amount: u64, attributes: Value, content: Option<Content>) -> Self {
+    pub fn new(
+        tick: String,
+        amount: u64,
+        attributes: Option<Value>,
+        content: Option<Content>,
+    ) -> Self {
         Self {
             tick,
             amount,
@@ -65,16 +81,10 @@ impl SFT {
     }
 
     pub fn to_mint_record(&self) -> MintRecord {
-        MintRecord {
-            tick: self.tick.clone(),
-            sft: self.clone(),
-        }
+        MintRecord { sft: self.clone() }
     }
 
     pub fn to_split_record(&self) -> SplitRecord {
-        SplitRecord {
-            tick: self.tick.clone(),
-            sft: self.clone(),
-        }
+        SplitRecord { sft: self.clone() }
     }
 }

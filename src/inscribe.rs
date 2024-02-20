@@ -1,7 +1,10 @@
 use {
     crate::{
-        generator::{Generator, InscribeSeed},
+        generator::{self, Generator, GeneratorLoader, InscribeSeed},
         inscription::InscriptionBuilder,
+        operation::{DeployRecord, MintRecord, Operation},
+        sft::{Content, SFT},
+        wallet::Wallet,
     },
     anyhow::{anyhow, bail, ensure, Result},
     bitcoin::{
@@ -20,13 +23,19 @@ use {
         bitcoincore_rpc_json::{ImportDescriptors, SignRawTransactionInput, Timestamp},
         RpcApi,
     },
+    ciborium::Value,
     clap::Parser,
     ord::{
-        wallet::{inscribe::Mode, Wallet},
-        Chain, FeeRate, Inscription, Target, TransactionBuilder,
+        inscriptions::ParsedEnvelope,
+        templates::{inscription, sat},
+        wallet::inscribe::Mode,
+        Chain, Envelope, FeeRate, Inscription, InscriptionId, Target, TransactionBuilder,
     },
     ordinals::SatPoint,
-    std::collections::{BTreeMap, BTreeSet},
+    std::{
+        collections::{BTreeMap, BTreeSet},
+        path::Path,
+    },
 };
 
 const TARGET_POSTAGE: Amount = Amount::from_sat(10_000);
@@ -35,14 +44,9 @@ const TARGET_POSTAGE: Amount = Amount::from_sat(10_000);
 pub struct InscribeOptions {
     #[arg(
         long,
-        help = "Use <UTXO> as the input and seed for the inscription transaction."
+        help = "Inscribe <SATPOINT>. This SatPoint will be used as mint seed."
     )]
-    pub(crate) seed: Option<OutPoint>,
-    #[arg(
-        long,
-        help = "Use <USER_INPUT> as the user custom input for the inscription generator."
-    )]
-    pub(crate) user_input: Option<String>,
+    pub(crate) satpoint: Option<SatPoint>,
     #[arg(
         long,
         help = "Use <COMMIT_FEE_RATE> sats/vbyte for commit transaction.\nDefaults to <FEE_RATE> if unset."
@@ -82,55 +86,112 @@ impl InscribeOptions {
 }
 
 pub struct Inscriber {
+    wallet: Wallet,
     option: InscribeOptions,
-    inscription: Inscription,
     mode: Mode,
+    inscription: Option<Inscription>,
+    satpoint: SatPoint,
+    destination: Address,
 }
 
 impl Inscriber {
-    pub fn new(option: InscribeOptions, inscription: Inscription) -> Self {
-        Self {
+    pub fn new(wallet: Wallet, option: InscribeOptions) -> Result<Self> {
+        let destination = match option.destination.clone() {
+            Some(destination) => destination.require_network(wallet.chain().network())?,
+            None => wallet.get_change_address()?,
+        };
+
+        let satpoint = match option.satpoint.clone() {
+            Some(satpoint) => {
+                //TODO check the satpoint exists.
+                satpoint
+            }
+            None => {
+                let utxo = wallet.select_utxo()?;
+                SatPoint {
+                    outpoint: utxo,
+                    offset: 0,
+                }
+            }
+        };
+
+        Ok(Self {
+            wallet,
             option,
-            inscription,
             mode: Mode::SharedOutput,
-        }
+            inscription: None,
+            satpoint,
+            destination,
+        })
     }
 
-    pub fn inscribe(
-        self,
-        wallet: &Wallet,
-    ) -> Result<(Transaction, Transaction, TweakedKeyPair, u64)> {
-        let mut utxos = wallet.get_unspent_outputs()?;
-        let mut locked_utxos = wallet.get_locked_outputs()?;
-        let runic_utxos = wallet.get_runic_outputs()?;
-        let chain = wallet.chain();
-        let commit_tx_change = [wallet.get_change_address()?, wallet.get_change_address()?];
-        let wallet_inscriptions = wallet.get_inscriptions()?;
+    pub fn with_generator<P>(mut self, generator_name: String, generator_program: P) -> Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let bytecode = std::fs::read(generator_program)?;
+        let content = Content::new(generator::CONTENT_TYPE.to_string(), bytecode);
+        let attributes = Value::Map(vec![(
+            Value::Text("name".to_string()),
+            Value::Text(generator_name.clone().into()),
+        )]);
+        let inscription = InscriptionBuilder::new()
+            .amount(1)
+            .tick(generator::TICK)
+            .content(content)
+            .attributes(attributes)
+            .finish();
+        self.inscription = Some(inscription);
+        Ok(self)
+    }
 
-        let seed_utxo = if let Some(seed) = self.option.seed {
-            ensure!(
-                utxos.contains_key(&seed),
-                "seed utxo not found in wallet utxos"
-            );
-            seed
-        } else {
-            let inscribed_utxos = wallet_inscriptions
-                .keys()
-                .map(|satpoint| satpoint.outpoint)
-                .collect::<BTreeSet<OutPoint>>();
-
-            utxos
-                .iter()
-                .find(|(outpoint, txout)| {
-                    txout.value > 0
-                        && !inscribed_utxos.contains(outpoint)
-                        && !locked_utxos.contains(outpoint)
-                        && !runic_utxos.contains(outpoint)
-                })
-                .map(|(outpoint, _amount)| *outpoint)
-                .ok_or_else(|| anyhow!("wallet contains no cardinal utxos"))?
+    pub fn with_deploy(
+        mut self,
+        tick: String,
+        amount: u64,
+        generator: String,
+        repeat: u64,
+        deploy_args: Vec<String>,
+    ) -> Result<Self> {
+        //TODO check the generator exists.
+        let deploy_record = DeployRecord {
+            tick,
+            amount,
+            generator,
+            repeat,
+            deploy_args,
         };
-        let btc_client = wallet.bitcoin_client()?;
+        self.with_operation(Operation::Deploy(deploy_record))
+    }
+
+    pub fn with_mint(
+        mut self,
+        deploy_inscription: InscriptionId,
+        user_input: Option<String>,
+    ) -> Result<Self> {
+        let deploy_inscription_json = self.wallet.get_inscription(deploy_inscription)?;
+        let tx = self
+            .wallet
+            .get_raw_transaction(&deploy_inscription_json.inscription_id.txid)?;
+        let inscriptions = ParsedEnvelope::from_transaction(&tx);
+        ensure!(
+            inscriptions.len() == 1,
+            "deploy transaction must have exactly one inscription"
+        );
+        let envelope = inscriptions
+            .into_iter()
+            .next()
+            .expect("inscriptions length checked");
+        let operation = Operation::from_inscription(envelope.payload)?;
+        let deploy_record = match operation {
+            Operation::Deploy(deploy_record) => deploy_record,
+            _ => bail!("deploy transaction must have a deploy operation"),
+        };
+        let generator_loader = GeneratorLoader::new(self.wallet.clone());
+        let generator = generator_loader.load(&deploy_record.generator)?;
+
+        let seed_utxo = self.satpoint.outpoint;
+        let btc_client = self.wallet.bitcoin_client()?;
         let seed_tx = btc_client.get_transaction(&seed_utxo.txid, Some(true))?;
         let seed = InscribeSeed::new(
             seed_tx
@@ -139,28 +200,50 @@ impl Inscriber {
                 .ok_or_else(|| anyhow!("seed utxo has no blockhash"))?,
             seed_utxo,
         );
+        let chain = self.wallet.chain();
 
-        let satpoint = SatPoint {
-            outpoint: seed_utxo,
-            offset: 0,
+        let destination = self.destination.clone();
+
+        let output =
+            generator.inscribe_generate(deploy_record.deploy_args, &seed, destination, user_input);
+        let sft = SFT {
+            tick: deploy_record.tick,
+            amount: output.amount,
+            attributes: output.attributes,
+            content: output.content,
         };
+        let mint_record = MintRecord { sft };
+        self.with_operation(Operation::Mint(mint_record))
+    }
 
-        let destination = match self.option.destination.clone() {
-            Some(destination) => destination.require_network(chain.network())?,
-            None => wallet.get_change_address()?,
-        };
+    fn with_operation(mut self, operation: Operation) -> Result<Self> {
+        let inscription = operation.to_inscription();
+        self.inscription = Some(inscription);
+        Ok(self)
+    }
 
-        //TODO
-        // let output = self
-        //     .generator
-        //     .inscribe_generate(vec![], &seed, destination, self.option.user_input.clone());
+    pub fn inscribe(self) -> Result<(Transaction, Transaction, TweakedKeyPair, u64)> {
+        let mut utxos = self.wallet.get_unspent_outputs()?;
+        let mut locked_utxos = self.wallet.get_locked_outputs()?;
+        let runic_utxos = self.wallet.get_runic_outputs()?;
+        let chain = self.wallet.chain();
+        let commit_tx_change = [
+            self.wallet.get_change_address()?,
+            self.wallet.get_change_address()?,
+        ];
+        let wallet_inscriptions = self.wallet.get_inscriptions()?;
+
+        let destination = self.destination;
+        let satpoint = self.satpoint;
+        let inscription = self
+            .inscription
+            .ok_or_else(|| anyhow!("inscription not set"))?;
 
         let secp256k1 = Secp256k1::new();
         let key_pair = UntweakedKeyPair::new(&secp256k1, &mut rand::thread_rng());
         let (public_key, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
 
-        let reveal_script = self
-            .inscription
+        let reveal_script = inscription
             .append_reveal_script_to_builder(
                 ScriptBuf::builder()
                     .push_slice(public_key.serialize())
@@ -352,7 +435,7 @@ impl Inscriber {
     //         wallet.chain().network(),
     //     );
 
-    //     let bitcoin_client = wallet.bitcoin_client()?;
+    //     let bitcoin_client = self.wallet.bitcoin_client()?;
 
     //     let info =
     //         bitcoin_client.get_descriptor_info(&format!("rawtr({})", recovery_private_key.to_wif()))?;

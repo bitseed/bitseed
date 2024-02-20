@@ -21,5 +21,5 @@ tiny-keccak = { version = "2", features = ["keccak", "sha3"] }
 anyhow = "1.0.62"
 primitive-types = { version = "0.12.1", features = ["serde", "arbitrary"] }
 reqwest = { version = "0.11.23", features = ["blocking", "json"] }
-ord = { version = "0.15.0", git = "https://github.com/bitseed/ord", rev = "474dd0c6126323e291735631951081911313fdf6"}
-ordinals = { version = "0.0.2", git = "https://github.com/bitseed/ord", rev = "474dd0c6126323e291735631951081911313fdf6"}
+ord = { version = "0.15.0", git = "https://github.com/bitseed/ord", rev = "8d8d1979b6e548083b0902d40c64f68a53724faa"}
+ordinals = { version = "0.0.2", git = "https://github.com/bitseed/ord", rev = "8d8d1979b6e548083b0902d40c64f68a53724faa"}

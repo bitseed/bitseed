@@ -1,3 +1,4 @@
+use anyhow::Result;
 use bitcoin::{
     address::NetworkUnchecked, block::Header, consensus::Encodable, hashes::Hash, Address, Block,
     BlockHash,
@@ -6,21 +7,23 @@ use ord::{Inscription, InscriptionId};
 use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 
+use crate::{sft::Content, wallet::Wallet};
+
+use self::mock::random_amount_generator;
+
 pub(crate) mod hash;
 pub(crate) mod mock;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct InscribeGenerateOutput {
     pub amount: u64,
-    // The inscription attributes, as a JSON object.
-    pub attributes: Option<serde_json::Value>,
-    pub content_type: Option<String>,
-    pub content: Option<Vec<u8>>,
+    pub attributes: Option<ciborium::Value>,
+    pub content: Option<Content>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct IndexerGenerateOutput {
-    pub attributes: Option<serde_json::Value>,
+    pub attributes: Option<ciborium::Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +75,7 @@ pub trait Generator {
         &self,
         deploy_args: Vec<String>,
         seed: &InscribeSeed,
-        recipient: Address<NetworkUnchecked>,
+        recipient: Address,
         user_input: Option<String>,
     ) -> InscribeGenerateOutput;
 
@@ -80,7 +83,7 @@ pub trait Generator {
         &self,
         deploy_args: Vec<String>,
         seed: &InscribeSeed,
-        recipient: Address<NetworkUnchecked>,
+        recipient: Address,
         user_input: Option<String>,
         inscribe_output: InscribeGenerateOutput,
     ) -> bool {
@@ -96,7 +99,7 @@ pub trait Generator {
         &self,
         deploy_args: Vec<String>,
         seed: &IndexerSeed,
-        recipient: Address<NetworkUnchecked>,
+        recipient: Address,
     ) -> IndexerGenerateOutput {
         IndexerGenerateOutput::default()
     }
@@ -124,7 +127,7 @@ impl Generator for StaticGenerator {
         &self,
         _deploy_args: Vec<String>,
         _seed: &InscribeSeed,
-        _recipient: Address<NetworkUnchecked>,
+        _recipient: Address,
         _user_input: Option<String>,
     ) -> InscribeGenerateOutput {
         self.inscribe_output.clone()
@@ -134,7 +137,7 @@ impl Generator for StaticGenerator {
         &self,
         _deploy_args: Vec<String>,
         _seed: &InscribeSeed,
-        _recipient: Address<NetworkUnchecked>,
+        _recipient: Address,
         _user_input: Option<String>,
         inscribe_output: InscribeGenerateOutput,
     ) -> bool {
@@ -149,8 +152,22 @@ impl Generator for StaticGenerator {
         &self,
         _deploy_args: Vec<String>,
         _seed: &IndexerSeed,
-        _recipient: Address<NetworkUnchecked>,
+        _recipient: Address,
     ) -> IndexerGenerateOutput {
         self.indexer_output.clone().unwrap()
+    }
+}
+
+pub struct GeneratorLoader {
+    wallet: Wallet,
+}
+
+impl GeneratorLoader {
+    pub fn new(wallet: Wallet) -> Self {
+        Self { wallet }
+    }
+    pub fn load(&self, _generator: &str) -> Result<Box<dyn Generator>> {
+        //TODO load generator from Inscription
+        Ok(Box::new(random_amount_generator::RandomAmountGenerator))
     }
 }

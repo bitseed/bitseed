@@ -8,8 +8,10 @@ use ord::Inscription;
 use ord::{FeeRate, InscriptionId};
 use std::path::PathBuf;
 
+use crate::wallet::Wallet;
+
 #[derive(Debug, Parser)]
-pub struct Mint {
+pub struct MintCommand {
     #[arg(long, help = "The deploy inscription id.")]
     pub(crate) deploy_inscription_id: InscriptionId,
     #[arg(
@@ -55,8 +57,8 @@ pub struct Mint {
     pub utxo: Option<OutPoint>,
 }
 
-impl Mint {
-    pub fn run(&self) -> Result<String> {
+impl MintCommand {
+    pub fn run(&self, _wallet: Wallet) -> Result<String> {
         // load generator
         // generate output
         // mint

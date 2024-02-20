@@ -9,7 +9,7 @@ impl Generator for RandomAmountGenerator {
         &self,
         deploy_args: Vec<String>,
         seed: &InscribeSeed,
-        _recipient: Address<NetworkUnchecked>,
+        _recipient: Address,
         _user_input: Option<String>,
     ) -> crate::generator::InscribeGenerateOutput {
         let hash = seed.seed();
@@ -19,7 +19,6 @@ impl Generator for RandomAmountGenerator {
         crate::generator::InscribeGenerateOutput {
             amount,
             attributes: None,
-            content_type: None,
             content: None,
         }
     }
