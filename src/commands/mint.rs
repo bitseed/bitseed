@@ -1,16 +1,9 @@
-use anyhow::Result;
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
-use bitcoin::Amount;
-use bitcoin::OutPoint;
-use clap::{Parser, Subcommand};
-use ord::Inscription;
-use ord::{FeeRate, InscriptionId};
-use std::path::PathBuf;
 use crate::inscribe::InscribeOptions;
 use crate::inscribe::Inscriber;
 use crate::wallet::Wallet;
 use crate::SubcommandResult;
+use clap::Parser;
+use ord::InscriptionId;
 
 #[derive(Debug, Parser)]
 pub struct MintCommand {

@@ -1,5 +1,5 @@
 use crate::generator::{Generator, InscribeSeed};
-use bitcoin::{address::NetworkUnchecked, Address};
+use bitcoin::Address;
 use primitive_types::U256;
 
 pub struct RandomAmountGenerator;

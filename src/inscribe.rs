@@ -1,6 +1,6 @@
 use {
     crate::{
-        generator::{self, Generator, GeneratorLoader, InscribeSeed},
+        generator::{self, GeneratorLoader, InscribeSeed},
         inscription::InscriptionBuilder,
         operation::{DeployRecord, MintRecord, Operation},
         sft::{Content, SFT},
@@ -11,13 +11,13 @@ use {
         absolute::LockTime,
         address::NetworkUnchecked,
         blockdata::{opcodes, script},
-        key::{PrivateKey, TapTweak, TweakedKeyPair, TweakedPublicKey, UntweakedKeyPair},
+        key::{TapTweak, TweakedKeyPair, TweakedPublicKey, UntweakedKeyPair},
         policy::MAX_STANDARD_TX_WEIGHT,
         secp256k1::{self, constants::SCHNORR_SIGNATURE_SIZE, rand, Secp256k1, XOnlyPublicKey},
         sighash::{Prevouts, SighashCache, TapSighashType},
         taproot::{ControlBlock, LeafVersion, Signature, TapLeafHash, TaprootBuilder},
-        Address, Amount, Network, OutPoint, Script, ScriptBuf, Sequence, Transaction, TxIn, TxOut,
-        Txid, Witness,
+        Address, Amount, OutPoint, PrivateKey, Script, ScriptBuf, Sequence, Transaction, TxIn,
+        TxOut, Txid, Witness,
     },
     bitcoincore_rpc::{
         bitcoincore_rpc_json::{ImportDescriptors, SignRawTransactionInput, Timestamp},
@@ -26,17 +26,12 @@ use {
     ciborium::Value,
     clap::Parser,
     ord::{
-        inscriptions::ParsedEnvelope,
-        templates::{inscription, sat},
-        wallet::inscribe::Mode,
-        Chain, Envelope, FeeRate, Inscription, InscriptionId, Target, TransactionBuilder,
+        inscriptions::ParsedEnvelope, FeeRate, Inscription, InscriptionId, Target,
+        TransactionBuilder,
     },
     ordinals::SatPoint,
     serde::{Deserialize, Serialize},
-    std::{
-        collections::{BTreeMap, BTreeSet},
-        path::Path,
-    },
+    std::{collections::BTreeMap, path::Path},
 };
 
 const TARGET_POSTAGE: Amount = Amount::from_sat(10_000);
@@ -59,6 +54,8 @@ pub struct InscribeOptions {
     pub(crate) dry_run: bool,
     #[arg(long, help = "Use fee rate of <FEE_RATE> sats/vB.")]
     pub(crate) fee_rate: FeeRate,
+    #[arg(long, alias = "nobackup", help = "Do not back up recovery key.")]
+    pub(crate) no_backup: bool,
     #[arg(
         long,
         alias = "nolimit",
@@ -103,7 +100,6 @@ pub struct InscribeOutput {
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
-    mode: Mode,
     inscription: Option<Inscription>,
     satpoint: SatPoint,
     destination: Address,
@@ -133,7 +129,6 @@ impl Inscriber {
         Ok(Self {
             wallet,
             option,
-            mode: Mode::SharedOutput,
             inscription: None,
             satpoint,
             destination,
@@ -161,7 +156,7 @@ impl Inscriber {
     }
 
     pub fn with_deploy(
-        mut self,
+        self,
         tick: String,
         amount: u64,
         generator: InscriptionId,
@@ -180,7 +175,7 @@ impl Inscriber {
     }
 
     pub fn with_mint(
-        mut self,
+        self,
         deploy_inscription: InscriptionId,
         user_input: Option<String>,
     ) -> Result<Self> {
@@ -215,7 +210,6 @@ impl Inscriber {
                 .ok_or_else(|| anyhow!("seed utxo has no blockhash"))?,
             seed_utxo,
         );
-        let chain = self.wallet.chain();
 
         let destination = self.destination.clone();
 
@@ -239,7 +233,7 @@ impl Inscriber {
 
     pub fn inscribe(self) -> Result<InscribeOutput> {
         let mut utxos = self.wallet.get_unspent_outputs()?;
-        let mut locked_utxos = self.wallet.get_locked_outputs()?;
+        let locked_utxos = self.wallet.get_locked_outputs()?;
         let runic_utxos = self.wallet.get_runic_outputs()?;
         let chain = self.wallet.chain();
         let commit_tx_change = [
@@ -481,9 +475,9 @@ impl Inscriber {
 
         let signed_reveal_tx = result.hex;
 
-        //   if !self.no_backup {
-        //     Self::backup_recovery_key(wallet, recovery_key_pair)?;
-        //   }
+        if !self.option.no_backup {
+            Self::backup_recovery_key(&self.wallet, recovery_key_pair)?;
+        }
 
         let commit = bitcoin_client.send_raw_transaction(&signed_commit_tx)?;
 
@@ -507,35 +501,35 @@ impl Inscriber {
         })
     }
 
-    // fn backup_recovery_key(wallet: &Wallet, recovery_key_pair: TweakedKeyPair) -> Result<()> {
-    //     let recovery_private_key = PrivateKey::new(
-    //         recovery_key_pair.to_inner().secret_key(),
-    //         wallet.chain().network(),
-    //     );
+    fn backup_recovery_key(wallet: &Wallet, recovery_key_pair: TweakedKeyPair) -> Result<()> {
+        let recovery_private_key = PrivateKey::new(
+            recovery_key_pair.to_inner().secret_key(),
+            wallet.chain().network(),
+        );
 
-    //     let bitcoin_client = self.wallet.bitcoin_client()?;
+        let bitcoin_client = wallet.bitcoin_client()?;
 
-    //     let info =
-    //         bitcoin_client.get_descriptor_info(&format!("rawtr({})", recovery_private_key.to_wif()))?;
+        let info = bitcoin_client
+            .get_descriptor_info(&format!("rawtr({})", recovery_private_key.to_wif()))?;
 
-    //     let response = bitcoin_client.import_descriptors(vec![ImportDescriptors {
-    //         descriptor: format!("rawtr({})#{}", recovery_private_key.to_wif(), info.checksum),
-    //         timestamp: Timestamp::Now,
-    //         active: Some(false),
-    //         range: None,
-    //         next_index: None,
-    //         internal: Some(false),
-    //         label: Some("commit tx recovery key".to_string()),
-    //     }])?;
+        let response = bitcoin_client.import_descriptors(vec![ImportDescriptors {
+            descriptor: format!("rawtr({})#{}", recovery_private_key.to_wif(), info.checksum),
+            timestamp: Timestamp::Now,
+            active: Some(false),
+            range: None,
+            next_index: None,
+            internal: Some(false),
+            label: Some("commit tx recovery key".to_string()),
+        }])?;
 
-    //     for result in response {
-    //         if !result.success {
-    //             return Err(anyhow!("commit tx recovery key import failed"));
-    //         }
-    //     }
+        for result in response {
+            if !result.success {
+                return Err(anyhow!("commit tx recovery key import failed"));
+            }
+        }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     fn build_reveal_transaction(
         control_block: &ControlBlock,

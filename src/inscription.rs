@@ -35,21 +35,6 @@ impl InscriptionBuilder {
         self
     }
 
-    fn add_metadata<S: ToString>(mut self, key: S, value: Value) -> Self {
-        self.metadata = self.metadata.add(key, value);
-        self
-    }
-
-    fn add_metadata_string<S: ToString>(mut self, key: S, value: String) -> Self {
-        self.metadata = self.metadata.add_string(key, value);
-        self
-    }
-
-    pub fn add_metadata_u64<S: ToString>(mut self, key: S, value: u64) -> Self {
-        self.metadata = self.metadata.add_u64(key, value);
-        self
-    }
-
     pub fn attributes(mut self, attributes: Value) -> Self {
         assert!(attributes.is_map());
         self.metadata = self.metadata.add(METADATA_ATTRIBUTES, attributes);

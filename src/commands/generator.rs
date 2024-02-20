@@ -1,20 +1,8 @@
-use crate::generator;
-use crate::generator::Generator;
 use crate::inscribe::InscribeOptions;
 use crate::inscribe::Inscriber;
-use crate::inscription::InscriptionBuilder;
-use crate::sft::Content;
 use crate::wallet::Wallet;
 use crate::SubcommandResult;
-use anyhow::Result;
-use bitcoin::address::NetworkUnchecked;
-use bitcoin::Address;
-use bitcoin::Amount;
-use bitcoin::OutPoint;
-use bitcoin::Txid;
-use clap::{Parser, Subcommand};
-use ord::Inscription;
-use ord::{FeeRate, InscriptionId};
+use clap::Parser;
 use std::path::PathBuf;
 
 /// Inscribe a new generator bytecode to Bitcoin

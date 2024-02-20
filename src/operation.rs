@@ -1,13 +1,10 @@
 use crate::{
-    generator,
     inscription::{BitseedInscription, InscriptionBuilder},
     sft::{Content, SFT},
-    PROTOCOL,
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, bail, Result};
 use ciborium::Value;
-use ord::{templates::inscription::InscriptionJson, Inscription};
-use std::collections::HashMap;
+use ord::Inscription;
 
 pub struct DeployRecord {
     pub tick: String,
@@ -104,10 +101,10 @@ impl Operation {
                 };
                 builder.finish()
             }
-            Operation::Split(record) => {
+            Operation::Split(_record) => {
                 todo!()
             }
-            Operation::Merge(record) => {
+            Operation::Merge(_record) => {
                 todo!()
             }
         }

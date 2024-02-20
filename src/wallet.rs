@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, bail, Result};
 use bitcoin::Address;
 use bitcoin::OutPoint;
 use bitcoin::TxOut;
@@ -9,8 +9,6 @@ use ord::templates::status::StatusJson;
 use ord::Chain;
 use ord::InscriptionId;
 use ord::Options;
-use ord::RuneEntry;
-use ord::RuneId;
 use ordinals::SatPoint;
 use reqwest::Url;
 use std::collections::BTreeMap;

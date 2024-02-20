@@ -1,9 +1,8 @@
-use anyhow::Result;
-use bitcoin::{
-    address::NetworkUnchecked, block::Header, consensus::Encodable, hashes::Hash, Address, Block,
-    BlockHash,
-};
-use ord::{Inscription, InscriptionId};
+use std::str::FromStr;
+
+use anyhow::{bail, Result};
+use bitcoin::{hashes::Hash, Address, BlockHash};
+use ord::InscriptionId;
 use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 
@@ -97,9 +96,9 @@ pub trait Generator {
 
     fn indexer_generate(
         &self,
-        deploy_args: Vec<String>,
-        seed: &IndexerSeed,
-        recipient: Address,
+        _deploy_args: Vec<String>,
+        _seed: &IndexerSeed,
+        _recipient: Address,
     ) -> IndexerGenerateOutput {
         IndexerGenerateOutput::default()
     }
@@ -166,7 +165,14 @@ impl GeneratorLoader {
     pub fn new(wallet: Wallet) -> Self {
         Self { wallet }
     }
-    pub fn load(&self, _generator: &str) -> Result<Box<dyn Generator>> {
+    pub fn load(&self, generator: &str) -> Result<Box<dyn Generator>> {
+        // generator: "/inscription/inscriptioin_id"
+        let path = generator.split('/').collect::<Vec<&str>>();
+        if path.len() != 3 {
+            bail!("Invalid generator path: {:?}", generator);
+        }
+        let inscription_id = InscriptionId::from_str(path[2])?;
+        let _inscription_json = self.wallet.get_inscription(inscription_id)?;
         //TODO load generator from Inscription
         Ok(Box::new(random_amount_generator::RandomAmountGenerator))
     }
