@@ -8,6 +8,7 @@ pub const METADATA_OP: &str = "op";
 pub const METADATA_TICK: &str = "tick";
 pub const METADATA_AMOUNT: &str = "amount";
 pub const METADATA_ATTRIBUTES: &str = "attributes";
+pub const GENERATOR_TICK: &str = "generator";
 
 pub(crate) mod commands;
 pub mod generator;

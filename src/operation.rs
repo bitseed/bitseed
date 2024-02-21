@@ -1,11 +1,13 @@
 use crate::{
     inscription::{BitseedInscription, InscriptionBuilder},
-    sft::{Content, SFT},
+    sft::SFT,
 };
 use anyhow::{anyhow, bail, Result};
 use ciborium::Value;
 use ord::Inscription;
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeployRecord {
     pub tick: String,
     // The total supply of the Inscription
@@ -33,18 +35,22 @@ impl DeployRecord {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MintRecord {
     pub sft: SFT,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SplitRecord {
     pub sft: SFT,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MergeRecord {
     pub sft: SFT,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Operation {
     Deploy(DeployRecord),
     Mint(MintRecord),
@@ -81,7 +87,6 @@ impl Operation {
                     .op(op.clone())
                     .tick(record.tick.clone())
                     .amount(record.amount)
-                    .content(Content::text(op))
                     .attributes(attributes)
                     .finish()
             }
@@ -89,16 +94,13 @@ impl Operation {
                 let mut builder = InscriptionBuilder::new()
                     .op(op.clone())
                     .tick(record.sft.tick.clone())
-                    .amount(record.sft.amount)
-                    .content(Content::text(op.clone()));
+                    .amount(record.sft.amount);
                 if let Some(attributes) = record.sft.attributes {
                     builder = builder.attributes(attributes);
                 }
-                builder = if let Some(content) = &record.sft.content {
-                    builder.content(content.clone())
-                } else {
-                    builder.content(Content::text(op))
-                };
+                if let Some(content) = record.sft.content {
+                    builder = builder.content(content)
+                }
                 builder.finish()
             }
             Operation::Split(_record) => {
@@ -115,13 +117,7 @@ impl Operation {
         let op = bitseed_inscription.op()?;
         let tick = bitseed_inscription.tick()?;
         let amount = bitseed_inscription.amount()?;
-
-        let content = bitseed_inscription.content()?;
-        let content = if content.is_text() && content.as_text().unwrap() == op {
-            None
-        } else {
-            Some(Content::new(content.content_type, content.body))
-        };
+        let content = bitseed_inscription.content();
 
         match op.as_ref() {
             "deploy" => {

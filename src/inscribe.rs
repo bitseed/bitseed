@@ -1,10 +1,10 @@
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
-        inscription::InscriptionBuilder,
         operation::{DeployRecord, MintRecord, Operation},
         sft::{Content, SFT},
         wallet::Wallet,
+        GENERATOR_TICK,
     },
     anyhow::{anyhow, bail, ensure, Result},
     bitcoin::{
@@ -25,10 +25,7 @@ use {
     },
     ciborium::Value,
     clap::Parser,
-    ord::{
-        inscriptions::ParsedEnvelope, FeeRate, Inscription, InscriptionId, Target,
-        TransactionBuilder,
-    },
+    ord::{FeeRate, Inscription, InscriptionId, Target, TransactionBuilder},
     ordinals::SatPoint,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, path::Path},
@@ -135,7 +132,7 @@ impl Inscriber {
         })
     }
 
-    pub fn with_generator<P>(mut self, generator_name: String, generator_program: P) -> Result<Self>
+    pub fn with_generator<P>(self, generator_name: String, generator_program: P) -> Result<Self>
     where
         P: AsRef<Path>,
     {
@@ -145,14 +142,15 @@ impl Inscriber {
             Value::Text("name".to_string()),
             Value::Text(generator_name.clone().into()),
         )]);
-        let inscription = InscriptionBuilder::new()
-            .amount(1)
-            .tick(generator::TICK)
-            .content(content)
-            .attributes(attributes)
-            .finish();
-        self.inscription = Some(inscription);
-        Ok(self)
+        let mint_record = MintRecord {
+            sft: SFT {
+                tick: GENERATOR_TICK.to_string(),
+                amount: 1,
+                attributes: Some(attributes),
+                content: Some(content),
+            },
+        };
+        self.with_operation(Operation::Mint(mint_record))
     }
 
     pub fn with_deploy(
@@ -179,20 +177,9 @@ impl Inscriber {
         deploy_inscription: InscriptionId,
         user_input: Option<String>,
     ) -> Result<Self> {
-        let deploy_inscription_json = self.wallet.get_inscription(deploy_inscription)?;
-        let tx = self
+        let operation = self
             .wallet
-            .get_raw_transaction(&deploy_inscription_json.inscription_id.txid)?;
-        let inscriptions = ParsedEnvelope::from_transaction(&tx);
-        ensure!(
-            inscriptions.len() == 1,
-            "deploy transaction must have exactly one inscription"
-        );
-        let envelope = inscriptions
-            .into_iter()
-            .next()
-            .expect("inscriptions length checked");
-        let operation = Operation::from_inscription(envelope.payload)?;
+            .get_operation_by_inscription_id(deploy_inscription)?;
         let deploy_record = match operation {
             Operation::Deploy(deploy_record) => deploy_record,
             _ => bail!("deploy transaction must have a deploy operation"),
