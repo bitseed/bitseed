@@ -1,2 +1,3 @@
 export * from './generator'
-export * from './asset'
+export * from './SFT'
+export * from './tick'

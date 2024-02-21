@@ -1,6 +1,7 @@
 
-export type BitSeedAsset = {
+export type SFT = {
+  p: string,
   tick: string,
-  amount: number,
+  amt: number,
   attributes?: Map<string, string>
 }

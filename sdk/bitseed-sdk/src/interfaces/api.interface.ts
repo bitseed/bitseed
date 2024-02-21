@@ -59,7 +59,7 @@ export interface APIInterface {
   name(): string;
   generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID>;
   deploy(tick: string, max: number, generator: Generator, opts?: DeployOptions): Promise<InscriptionID>;
-  mint(tickInscriptionId: InscriptionID, amt: number, attributes: Map<string, string>, opts?: InscribeOptions): Promise<InscriptionID>;
+  mint(tickInscriptionId: InscriptionID, userInput: string, opts?: InscribeOptions): Promise<InscriptionID>;
   merge(a: InscriptionID, b: InscriptionID): Promise<InscriptionID>;
   split(a: InscriptionID): Promise<[InscriptionID, InscriptionID]>;
 }
