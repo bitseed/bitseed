@@ -4,10 +4,22 @@
 
 生成器，或称为生成函数（Generator Function, G），是Bitseed协议中的核心组件，其设计基于确定性算法，确保输入相同的种子（Seed）值将稳定产生相同的输出结果。在Bitseed协议中，种子的生成遵循以下步骤：
 
-* 种子生成：种子是一个由特定区块链数据结合而成的唯一标识符，通常由比特币网络中的区块哈希（BlockHash）与交易哈希（TxHash）的加密散列组合构成。形式上，种子可以表示为 seed = H(BlockHash || TxHash)，其中 H 表示使用的加密哈希函数，|| 代表串联操作。
+* 种子生成：种子是一个由特定区块链数据结合而成的唯一标识符，由比特币网络中的区块哈希（BlockHash）与交易哈希（TxHash）的加密散列组合构成。形式上，种子可以表示为 seed = H(BlockHash || TxHash)，其中 H 表示使用的加密哈希函数，|| 代表串联操作。
 * 输出计算：生成器函数 G 接受种子作为输入，并通过执行预设的算法逻辑来生成输出（Output）。输出可以代表游戏中的资产、道具、角色或世界的其他元素。生成器的输出是确定性的，这意味着相同的种子将始终生成相同的输出。
 * 生成器编译：为了确保生成器的广泛兼容性和执行效率，生成器逻辑需要被编译成WebAssembly（WASM）格式，并在比特币网络上进行铭刻，这样任何铭文索引器可以在执行时直接调用。
-* 可验证性：由于生成器的逻辑是公开和透明的，因此任何参与者都能验证输出的正确性。这一点对于确保Bitseed协议的公正性和透明性至关重要。
+* 可验证性：由于生成器的逻辑是公开和透明的，因此任何参与者都能验证输出的正确性。
+
+## 铭刻生成器
+
+生成器是一种特殊的 Bitseed 铭文，它的 tick 是 `generator`，开发者需要将生成器的 WASM 文件铭刻到比特币上，供用户和铭文索引器调用。
+
+生成器的铭刻交易需要包含以下几个字段：
+
+* `tick`: `generator`。
+* `op`: `mint`。
+* `amount`: 1，表示它是不可分割的。
+* `content.content_type`: `application/wasm`，表示内容是一个 WASM 文件。
+* `content.body`: 生成器的 WASM bytecode。
 
 ## 生成器的 API 规范
 
@@ -16,10 +28,36 @@
 生成器需要提供两个 `generate` 方法，分别用于铭刻时的生成和链下索引时的生成：
 
 ```rust
-fn inscribe_generate(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String) -> String;
-fn inscribe_verify(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String, output: String) -> bool;
+struct Content {
+    content_type: String,
+    content: Vec<u8>,
+}
+
+pub struct InscribeGenerateOutput {
+    pub amount: u64,
+    pub attributes: Option<ciborium::Value>,
+    pub content: Option<Content>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct IndexerGenerateOutput {
+    pub attributes: Option<ciborium::Value>,
+}
+
+pub struct InscribeSeed {
+    pub block_hash: BlockHash,
+    pub utxo: bitcoin::OutPoint,
+}
+
+pub struct IndexerSeed {
+    pub block_hash: BlockHash,
+    pub inscription_id: InscriptionId,
+}
+
+fn inscribe_generate(deploy_args: Vec<String>, seed: InscribeSeed, recipient: Address, user_input: Option<String>) -> InscribeGenerateOutput;
+fn inscribe_verify(deploy_args: Vec<String>, seed: IndexerSeed, recipient: Address, user_input: Option<String>, output: InscribeGenerateOutput) -> bool;
 fn has_indexer_generate() -> bool;
-fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String;
+fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> IndexerGenerateOutput;
 ```
 
 ### inscribe_generate
@@ -28,8 +66,9 @@ fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String
 
 * `deploy_args`: 部署时提供的静态参数列表。
 * `seed`: 种子，基于铭刻交易的第一个 UTXO 输入计算获得。
+* `recipient`: 铭文的接收地址。
 * `user_input`: 用户输入，只有部署设置的 `has_user_input` 为 true 时才会有值。
-* 返回值: 铭文的 JSON 内容。
+* 返回值: amount, attributes, content。
 
 ### inscribe_verify
 
@@ -37,8 +76,9 @@ fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String
 
 * `deploy_args`: 部署时提供的静态参数列表。
 * `seed`: 种子，基于铭刻交易的第一个 UTXO 输入计算获得。
+* `recipient`: 铭文的接收地址。
 * `user_input`: 用户输入，只有部署设置的 `has_user_input` 为 true 时才会有值。
-* `output`: 铭文的 JSON 内容。
+* `output`: `inscribe_generate` 的输出结果。
 * 返回值: 验证结果。
 
 一般情况下，`inscribe_verify` 方法的实现和 `inscribe_generate` 方法的实现是一致的，但有时候为了提高效率，可以使用更简单的验证逻辑。比如通过 PoW 铭刻的铭文，可以只验证铭文的哈希难度。
@@ -48,29 +88,20 @@ fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String
 `indexer_generate` 方法用于链下索引时的生成，它的输出结果将被铭文索引器保存，但不会出现在链上。
 
 * `deploy_args`: 部署时提供的静态参数列表。
-* `inscription_id`: 铭文的 ID
+* `seed`: 种子，基于铭刻交易自己所在的区块以及铭文的 ID 计算获得。
+* `recipient`: 铭文的接收地址。
 * 返回值: 铭文的额外属性。
 
 indexer_generate 方法只有在 has_indexer_generate 方法返回 true 时才会被调用。由于它的计算需要等待交易上链生成 `inscription_id`， 用户无法提前计算出它的输出，可以被用在类似开盲盒的场景中。
 
 ## Generator Output 标准
 
-Output 是一种 JSON，它里面包含四个字段：
+InscribeGenerateOutput 包含三个字段
 
-```json
-{
-    "p":"bitseed",
-    "tick": "myworld",
-    "amt": 1,
-    "attributes": {}
-}
-```
+* `amount`: 生成的资产数量。
+* `attributes`: 生成的资产的额外属性，可选。
+* `content`: 生成的资产的内容，可选。
 
-| 属性             | 描述                              | 必须 |
-| --------------- | --------------------------------- | --- |
-| p               | 协议名称，必须为 bitseed             | 是  |
-| tick            | 类型，4~32字符，大小写不敏感          | 是  |
-| amt             | 数量                              | 是  |
-| attributes      | 应用自定义的属性                     | 否  |
+IndexerGenerateOutput 包含一个字段
 
-这个 JSON 实际上是一种 SFT 的表达方式，这种方式既可以用来表达 FT，也可以用来表达 NFT，所以可以表达任何游戏内的资产。
+* `attributes`: 生成的资产的额外属性。

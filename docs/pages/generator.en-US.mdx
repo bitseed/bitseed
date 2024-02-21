@@ -2,12 +2,24 @@
 
 ## How the Generator Works
 
-The generator, also known as the Generator Function (G), is a core component of the Bitseed protocol. It is designed based on deterministic algorithms, ensuring that the same Seed value reliably produces the same output results. In the Bitseed protocol, the generation of seeds follows these steps:
+The generator, also referred to as the Generator Function (G), is a core component of the Bitseed protocol. It is designed based on deterministic algorithms to ensure that the same Seed value will consistently produce the same output results. In the Bitseed protocol, the generation of seeds follows these steps:
 
-* Seed Generation: The seed is a unique identifier formed by combining specific blockchain data, typically a cryptographic hash combination of the Bitcoin network's block hash (BlockHash) and transaction hash (TxHash). Formally, a seed can be represented as seed = H(BlockHash || TxHash), where H represents the cryptographic hash function used, and || denotes the concatenation operation.
-* Output Calculation: The generator function G accepts the seed as input and generates an output (Output) by executing the predetermined algorithmic logic. The output may represent assets, props, characters, or other elements of the game world. The generator's output is deterministic, meaning the same seed will always produce the same output.
-* Generator Compilation: To ensure widespread compatibility and execution efficiency of the generator logic, it needs to be compiled into WebAssembly (WASM) format and inscribed on the Bitcoin network, allowing any inscription indexer to call it directly during execution.
-* Verifiability: As the logic of the generator is public and transparent, all participants can verify the correctness of the output. This is crucial for ensuring the fairness and transparency of the Bitseed protocol.
+- **Seed Generation**: The seed is a unique identifier formed by combining specific blockchain data, constituted by the cryptographic hash combination of the block hash (BlockHash) and transaction hash (TxHash) within the Bitcoin network. Formally, the seed can be represented as seed = H(BlockHash || TxHash), where H denotes the cryptographic hash function used, and || represents the concatenation operation.
+- **Output Calculation**: The generator function G takes the seed as input and generates an output (Output) by executing predetermined algorithmic logic. The output may represent assets, props, characters, or other elements within the game world. The output of the generator is deterministic, meaning the same seed will always produce the same output.
+- **Generator Compilation**: To ensure broad compatibility and execution efficiency of the generator logic, it needs to be compiled into WebAssembly (WASM) format and inscribed on the Bitcoin network, allowing any inscription indexer to directly invoke it during execution.
+- **Verifiability**: Since the logic of the generator is public and transparent, all participants can verify the correctness of the output.
+
+## Inscribing the Generator
+
+The generator is a special type of Bitseed inscription with its tick set as `generator`. Developers need to inscribe the WASM file of the generator onto Bitcoin, making it available for users and inscription indexers to call.
+
+The inscription transaction for the generator needs to include the following fields:
+
+- `tick`: `generator`.
+- `op`: `mint`.
+- `amount`: 1, indicating it is not fungible.
+- `content.content_type`: `application/wasm`, indicating the content is a WASM file.
+- `content.body`: The WASM bytecode of the generator.
 
 ## API Specification of the Generator
 
@@ -15,64 +27,84 @@ The WASM of the generator needs to provide a set of standard API interfaces for 
 
 The generator needs to provide two `generate` methods, one for generation during inscription and one for generation during off-chain indexing:
 
+
 ```rust
-fn inscribe_generate(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String) -> String;
-fn inscribe_verify(deploy_args: Vec<String>, seed: Vec<u8>, user_input: String, output: String) -> bool;
+struct Content {
+    content_type: String,
+    content: Vec<u8>,
+}
+
+pub struct InscribeGenerateOutput {
+    pub amount: u64,
+    pub attributes: Option<ciborium::Value>,
+    pub content: Option<Content>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct IndexerGenerateOutput {
+    pub attributes: Option<ciborium::Value>,
+}
+
+pub struct InscribeSeed {
+    pub block_hash: BlockHash,
+    pub utxo: bitcoin::OutPoint,
+}
+
+pub struct IndexerSeed {
+    pub block_hash: BlockHash,
+    pub inscription_id: InscriptionId,
+}
+
+fn inscribe_generate(deploy_args: Vec<String>, seed: InscribeSeed, recipient: Address, user_input: Option<String>) -> InscribeGenerateOutput;
+fn inscribe_verify(deploy_args: Vec<String>, seed: IndexerSeed, recipient: Address, user_input: Option<String>, output: InscribeGenerateOutput) -> bool;
 fn has_indexer_generate() -> bool;
-fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> String;
+fn indexer_generate(deploy_args: Vec<String>, inscription_id: Vec<u8>) -> IndexerGenerateOutput;
 ```
 
 ### inscribe_generate
 
-The `inscribe_generate` method is used for the generation of inscription, and its output result will be written into the blockchain.
+The `inscribe_generate` method is used for generation at the time of inscription, and its output result will be written into the blockchain.
 
-* `deploy_args`: List of static parameters provided at the time of deployment.
-* `seed`: The seed, which is calculated based on the first UTXO input of the inscription transaction.
-* `user_input`: User input, which will have a value only if the deployment setting `has_user_input` is true.
-* Return Value: The JSON content of the inscription.
+- **`deploy_args`**: A list of static parameters provided at the time of deployment.
+- **`seed`**: The seed, calculated based on the first UTXO input of the inscription transaction.
+- **`recipient`**: The receiving address of the inscription.
+- **`user_input`**: User input, which will only have a value if the deployment setting `has_user_input` is true.
+- **Return Value**: amount, attributes, content.
 
 ### inscribe_verify
 
 The `inscribe_verify` method is used to verify the results of the inscription, and the indexer will call it to verify the correctness of the inscription.
 
-* `deploy_args`: List of static parameters provided at the time of deployment.
-* `seed`: The seed, which is calculated based on the first UTXO input of the inscription transaction.
-* `user_input`: User input, which will have a value only if the deployment setting `has_user_input` is true.
-* `output`: The JSON content of the inscription.
-* Return Value: The result of the verification.
+- **`deploy_args`**: A list of static parameters provided at the time of deployment.
+- **`seed`**: The seed, calculated based on the first UTXO input of the inscription transaction.
+- **`recipient`**: The receiving address of the inscription.
+- **`user_input`**: User input, which will only have a value if the deployment setting `has_user_input` is true.
+- **`output`**: The output of the `inscribe_generate` function.
+- **Return Value**: The result of the verification.
 
-In most cases, the implementation of the `inscribe_verify` method is consistent with that of the `inscribe_generate` method, but sometimes a simpler verification logic can be used for efficiency. For instance, for inscriptions minted through PoW, it may suffice to verify the hash difficulty of the inscription.
+Generally, the implementation of the `inscribe_verify` method is consistent with that of the `inscribe_generate` method, but sometimes, for efficiency, a simpler verification logic can be used. For example, for inscriptions minted through PoW, it may suffice to verify the hash difficulty of the inscription.
 
 ### indexer_generate
 
-The `indexer_generate` method is used for off-chain indexing generation, its output result will be saved by the inscription indexer, but will not appear on the blockchain.
+The `indexer_generate` method is used for off-chain indexer generation, and its output result will be saved by the inscription indexer but will not appear on the blockchain.
 
-* `deploy_args`: List of static parameters provided at the time of deployment.
-* `inscription_id`: The ID of the inscription.
-* Return Value: The additional attributes of the inscription.
+- **`deploy_args`**: A list of static parameters provided at the time of deployment.
+- **`seed`**: The seed, calculated based on the block containing the inscription transaction itself and the ID of the inscription.
+- **`recipient`**: The receiving address of the inscription.
+- **Return Value**: Additional attributes of the inscription.
 
-The `indexer_generate` method will only be called if the `has_indexer_generate` method returns true. Since its computation needs to wait for the transaction to be on-chain to generate the `inscription_id`, users cannot pre-calculate its output, which can be used in scenarios like opening a mystery box.
+The `indexer_generate` method will only be called if the `has_indexer_generate` method returns true. Since its computation needs to wait for the transaction to be on-chain to generate the `inscription_id`, users cannot pre-calculate its output, making it suitable for scenarios like opening a mystery box.
 
-## Generator Output Standard
+## Standard for Generator Output
 
-The Output is a JSON that contains four fields:
+The InscribeGenerateOutput includes three fields:
 
-```json
-{
-    "p": "bitseed",
-    "tick": "myworld",
-    "amt": 1,
-    "attributes": {}
-}
-```
+- **`amount`**: The quantity of the assets generated.
+- **`attributes`**: Additional attributes of the generated assets, optional.
+- **`content`**: The content of the generated assets, optional.
 
-| Attribute    | Description                        | Required |
-| ------------ | ---------------------------------- | -------- |
-| p            | Protocol name, must be "bitseed"   | Yes      |
-| tick         | Type, 4-32 characters, case-insensitive | Yes      |
-| amt          | Quantity                           | Yes      |
-| attributes   | Application-defined attributes     | No       |
+The IndexerGenerateOutput includes one field:
 
-This JSON is actually a way of expressing an SFT, which can be used to express both FT and NFT, so it can represent any asset within the game.
+- **`attributes`**: Additional attributes of the generated assets.
 
 
