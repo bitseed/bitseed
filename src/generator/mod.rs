@@ -24,8 +24,8 @@ pub struct IndexerGenerateOutput {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InscribeSeed {
-    block_hash: BlockHash,
-    utxo: bitcoin::OutPoint,
+    pub block_hash: BlockHash,
+    pub utxo: bitcoin::OutPoint,
 }
 
 impl InscribeSeed {
@@ -43,8 +43,8 @@ impl InscribeSeed {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexerSeed {
-    block_hash: BlockHash,
-    inscription_id: InscriptionId,
+    pub block_hash: BlockHash,
+    pub inscription_id: InscriptionId,
 }
 
 impl IndexerSeed {

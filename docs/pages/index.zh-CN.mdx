@@ -1,15 +1,44 @@
 
 # Bitseed 协议介绍
 
-Bitseed 尝试给 Ordinals 协议提供扩展能力，让 Inscription 更方便的在全链游戏以及自主世界（Autonomous World）中使用。Bitseed 协议受到了各种铭文协议的启发，包括但不限于 BRC20， BRC420，BRC1024 等，向先行者致敬。
+Bitseed 尝试给 Ordinals 协议提供扩展能力，让 Inscription 更方便的在全链游戏以及自主世界（Autonomous World）中使用。Bitseed 协议受到了各种铭文协议的启发，包括但不限于 BRC20， BRC420，BRC1024，CBRC-20 等，向先行者致敬。
 
 ## 世界源于种子（seed）
 
-我们认为任何游戏世界都可以通过一个生成器（Generator）和一个种子（Seed）来生成。这个种子，由比特币区块的哈希值和交易的哈希值共同构成，确保了每个生成的世界都是独一无二的。我们可以利用 Bitcoin 提供的种子，去生成游戏中的资产，道具，角色，以及世界。
+我们认为任何游戏世界都可以通过一个生成器（Generator）和一个种子（Seed）来生成。这个种子，由比特币区块的哈希值和交易的哈希值共同构成，确保了每个生成的世界都是独一无二的，并且 Bitcoin 的 UTXO 机制保证了这个种子只能使用一次。我们可以利用 Bitcoin 提供的种子，去生成游戏中的资产，道具，角色，以及世界。
+
+## SFT（Semi-Fungible Token）是最好的自主世界资产表达方式
+
+我们认为 SFT 是最好的自主世界资产表达方式，因为它兼具了 NFT 和 FT 的特性，可以用同一种格式表达不同类型的资产。而 Ordinals 协议的 Inscription 格式具有良好的扩展性，我们可以在 Inscriptioin 上定义 SFT 的格式。
+
+Bitseed SFT 到 Inscription 的字段映射关系如下：
+
+| SFT                   | Ord Inscription            | 类型        |范围                        | 必须字段  |
+| --------------------- | -------------------------- |------------|----------------------------|---------|
+|protocol               | metaprotocol               | String     | bitseed                    | true    |
+|op                     | metadata.op                | String     | deploy,mint,split,merge    | true    |
+|tick                   | metadata.tick              | String     | printable ASCII char       | true    |          
+|amount                 | metadata.amount            | u64        | 1-u64::max()               | true    |
+|attributes             | metadata.attributes        | Map        |                            | false   |
+|content.content_type    | content_type               | String     |                            | false   |
+|content.body           | body                       | Bytes      |                            | false   |
+
+## 协议特性
+
+Bitseed 协议具有以下特性：
+
+* 更灵活的扩展性：开发者可以通过编写生成器，来定义自己的资产生成以及发行规则，而不需要把逻辑硬编码在协议以及索引器中。
+* 利用 Bitcoin 的区块哈希提供随机性：Bitseed 协议利用 Bitcoin 区块的哈希值和交易的哈希值作为种子，提供了一个全局唯一的随机种子，可以让应用更有趣。它同时提供两种随机方式，一种在铭刻时随机，另外一种在索引器中随机，可以提供类盲盒的玩法。
+* 更高的区块利用率：Bitseed 利用 Ordinals 协议提供的 metaprotocol 和 metadata 来存储数据，保证数据字段的结构化，这样可以更高的利用区块空间，节省用户的手续费。
+* 更丰富的资产表达：Bitseed 协议可以表达更丰富的资产。
+    - `content` 和 `attributes` 为空，表示一个典型的 FT。
+    - `content` 如果是一个图片，`amount` 为 1 表示一个 NFT，`amount` 大于 1 表示可堆叠的 NFT。
+    - `attributes` 可以保存开发者自定义的属性，比如游戏道具的属性。
+* 复用 Ordinals 协议的基础设施：Bitseed 协议在 Ordinals 协议的基础上进行扩展，可以复用 Ordinals 协议的基础设施。
 
 ## 生成器（Generator）
 
-生成器给开发者提供了一种通用的扩展机制，开发者可以通过编写生成器，来定义自己的生成规则。让 Bitseed 协议成为一个通用的铭文协议。生成器的工作原理参看 [Generator](./generator)。
+生成器给开发者提供了一种通用的扩展机制，开发者可以通过编写生成器，来定义自己的资产生成以及发行规则。让 Bitseed 协议成为一个通用的铭文 SFT 协议。生成器的工作原理参看 [Generator](./generator)。
 
 ## 协议操作
 
@@ -19,25 +48,27 @@ Bitseed 协议对资产的操作包括：`Deploy`，`Mint`，`Transfer`， `Merg
 
 ### 用户操作流程 
 
-* 用户选择自己的一个 UTXO，作为铭刻交易的 Input 进行铭刻，该 Input 也作为交易的种子。
-* 调用对应 tick 的生成器，将种子作为参数传递给生成器，生成器生成输出。 
-* 将输出按照 Inscription 的标准铭刻在 Bitcoin 上，content_type 为 `application/json`。
+* 用户选择自己的一个 UTXO，作为铭刻交易的 Input 进行铭刻，该 Input 作为 Ordinals 的 Satpoint，同时也作为交易的种子。
+* 铭刻应用调用对应 tick 的生成器，将种子作为参数传递给生成器，生成器生成输出。 
+* 将输出按照 Inscription 以及 Bitseed 的标准铭刻在 Bitcoin 上。
 
-### 索引器校验流程
+### 索引器执行流程
 
-* 索引器监听 deploy 交易，并提前下载好生成器程序。
-* 索引器监听 Mint 交易，重新执行生成器校验用户铭刻的内容是否和生成器匹配。
-* 根据 deploy 的设置，校验总量和重复次数。
+* 索引器监听 Deploy 交易，并提前下载好生成器程序。
+* 索引器监听 Mint 交易，重新通过生成器校验用户铭刻的内容是否正确。
+* 根据 Deploy 的设置，校验总量和重复次数。
 * 校验 Merge 和 Split 交易的合法性。
+* 如果 generator 提供了 `indexer_generate` 函数，Indexer 需要调用该函数生成链下的额外属性。
 
-### 通过 ZK 优化 Indexer 校验
+### 通过零知识证明（Zero Knowledge Proof）优化 Indexer 校验
 
-如果生成器是可以 ZK 化的，用户 mint 后同时可以铭刻上自己的 zk proof， 生成器只需要校验 zk proof 即可。
+如果生成器是可以零知识化的，用户 Mint 时可以同时提供自己的零知识证明， 生成器只需要校验证明即可。
 
 ## 应用案例
 
 * bits: Bitseed 协议的第一个 FT，它每次 mint 获取的数量根据 seed 随机， `generator = random(seed,[1000,10000])`。
 * seed: Bitseed 协议的第一个文本 NFT，它直接将 seed 作为 attributes 输出。
 * 基于用户输入的名字服务，用户输入名字，名字作为 attributes 输出，通过设置部署时的 `repeat` 参数为 1，保证名字唯一。
-* 基于 Merkle tree 的白名单 mint，Merkle tree 的 root 在用户铭文部署时提供，用户 mint 时需要提供 Merkle proof，生成器校验 Merkle proof 即可。
-* 基于 PoW 的 mint，用户 mint 时需要根据部署时的难度设置，计算 PoW 结果，生成器校验 PoW 结果即可。
+* 基于 Merkle tree 的白名单 Mint，Merkle tree 的 root 在用户铭文部署时提供，用户 Mint 时需要提供 Merkle proof，生成器校验 Merkle proof 即可。
+* 基于 PoW 的 Mint，用户 Mint 时需要根据部署时的难度设置，计算 PoW 结果，生成器校验 PoW 结果即可。
+* 基于多签的真实世界资产 Mint，用户 Mint 时需要提供资产监管方的多签签名，生成器校验多签签名即可。
