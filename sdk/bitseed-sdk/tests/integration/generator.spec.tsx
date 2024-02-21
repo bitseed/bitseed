@@ -1,18 +1,18 @@
 import React from 'react'
+
+import path from 'path'
 import { test, expect } from '@playwright/experimental-ct-react';
-import DeployStory from './deploy.story';
+import DeployGeneratorStory from './generator.story';
 
 test.use({ viewport: { width: 500, height: 500 } });
 
-test('Deploy tick with generator inscription_id', async ({ mount }) => {
-  const component = await mount(<DeployStory />);
+test('Deploy generator', async ({ mount }) => {
+  const component = await mount(<DeployGeneratorStory />);
   
   const inscriptionId = 'dd1f515b828eedabd6b0be147cf611ca08c20f39058feee9b96efaa2eba43d9di0';
 
-  // Input the InscriptionID
-  await component.locator('input[placeholder="Tick"]').fill('move');
-  await component.locator('input[placeholder="Max"]').fill('1000');
-  await component.locator('input[placeholder="InscriptionID"]').fill(inscriptionId);
+  // Upload generator wasm file
+  await component.locator('input[placeholder="wasmFile"]').setInputFiles(path.join(__dirname, './data/generator.wasm'))
 
   // Click the deploy button
   await component.locator('button:has-text("Deploy")').click();

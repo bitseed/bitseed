@@ -1,42 +1,18 @@
 import React, { useEffect, useState } from "react";
-import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
-import { Ordit } from "@sadoprotocol/ordit-sdk";
-import { BitSeed, BitSeedApiMock, Generator, InscriptionID, DeployOptions, parseInscriptionID, inscriptionIDToString } from '../../src';
 
-const network = "testnet";
-const datasource = new JsonRpcDatasource({ network });
-const bitseedApiMock = new BitSeedApiMock();
+import { BitSeed, InscriptionID, parseInscriptionID, inscriptionIDToString, DeployOptions } from '../../src'
+import { createTestBitSeed } from './commons/test_bitseed'
 
 export default function DeployStory() {
   const [bitseed, setBitseed] = useState<BitSeed | undefined>(undefined);
   const [tick, setTick] = useState<string>('');
   const [max, setMax] = useState<number>(0);
-  const [generatorType, setGeneratorType] = useState<"Bytes" | "InscriptionID" | "File">("Bytes");
   const [generatorValue, setGeneratorValue] = useState<string>('');
-  const [file, setFile] = useState<File | null>(null);
   const [deployResult, setDeployResult] = useState<InscriptionID | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    // address: tb1pz9qq9gwemapvmpntw90ygalhnjzgy2d7tglts0a90avrre902z2sh3ew0h
-    const primaryWallet = new Ordit({
-      wif: "cNGdjKojxE7nCcYdK34d12cdYTzBdDV4VdXdbpG7SHGTRWuCxpAW",
-      network,
-      type: 'taproot'
-    });
-
-    // address: tb1p2lsktn6x2eq5h7wfk50xfrr2hlpjhp7q0gget6p4957hy2swt3jsar6zny
-    const fundingWallet = new Ordit({
-      wif: "cTW1Q2A8AVBuJ1sEBoV9gWokc6e5NYFPHxez6hhriVL2jKH6bfct",
-      network,
-      type: 'taproot'
-    });
-
-    console.log("primary wallet address:", primaryWallet.selectedAddress)
-    console.log("funding wallet address:", fundingWallet.selectedAddress)
-
-    const bitseed = new BitSeed(primaryWallet, fundingWallet, datasource, bitseedApiMock);
-    setBitseed(bitseed);
+    setBitseed(createTestBitSeed());
   }, []);
 
   const handleDeploy = async () => {
@@ -61,57 +37,15 @@ export default function DeployStory() {
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setFile(files[0]);
-      setGeneratorType("File"); // Automatically set to File type
-    } else {
-      setFile(null);
-    }
-  };
-
-  // 读取文件内容并转换为 Uint8Array 的函数
-  const readFileAsBytes = (file: File): Promise<Uint8Array> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const result = event.target?.result;
-        if (result) {
-          resolve(new Uint8Array(result as ArrayBuffer));
-        } else {
-          reject(new Error("Failed to read file"));
-        }
-      };
-      reader.onerror = (event) => {
-        reject(new Error(`FileReader error: ${event.target?.error?.message}`));
-      };
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
   return (
     <div>
       <div>
-        Deploy: {bitseed?.name()}
+        Deploy Tick
       </div>
       <div>
         <input type="text" placeholder="Tick" value={tick} onChange={(e) => setTick(e.target.value)} />
         <input type="number" placeholder="Max" value={max} onChange={(e) => setMax(Number(e.target.value))} />
-        <select value={generatorType} onChange={(e) => setGeneratorType(e.target.value as any)}>
-          <option value="Bytes">Bytes</option>
-          <option value="InscriptionID">InscriptionID</option>
-          <option value="File">File</option>
-        </select>
-        {generatorType === 'InscriptionID' && (
-          <input type="text" placeholder="InscriptionID" value={generatorValue} onChange={(e) => setGeneratorValue(e.target.value)} />
-        )}
-        {generatorType === 'Bytes' && (
-          <input type="text" placeholder="Generator Value (Base64)" value={generatorValue} onChange={(e) => setGeneratorValue(e.target.value)} />
-        )}
-        {generatorType === 'File' && (
-          <input type="file" onChange={handleFileChange} />
-        )}
+        <input type="text" placeholder="InscriptionID" value={generatorValue} onChange={(e) => setGeneratorValue(e.target.value)} />
         <button onClick={handleDeploy}>Deploy</button>
       </div>
       {deployResult && <div>Deploy Result: {inscriptionIDToString(deployResult)}</div>}
