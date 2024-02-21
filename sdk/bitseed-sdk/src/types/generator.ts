@@ -1,4 +1,7 @@
 export type Bytes = Uint8Array;
-export type InscriptionID = string;
+export type InscriptionID = {
+  txid: string,
+  index: number,
+}
 
-export type Generator = Bytes | InscriptionID
+export type Generator = InscriptionID

@@ -1,6 +1,7 @@
 
-import { Generator } from './types'
-import { APIInterface, DeployOptions } from './interfaces'
+import { InscriptionID, Generator } from './types'
+import { inscriptionIDToString } from './utils'
+import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
 import { RoochBitSeedApiInterface } from './api'
 import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Inscriber, Ordit, ordit } from "@sadoprotocol/ordit-sdk"
@@ -18,11 +19,11 @@ export class BitSeed implements APIInterface {
     this.bitSeedApi = bitSeedApi;
   }
 
-  name(): string {
+  public name(): string {
     return "bitseed"
   }
   
-  async storeGenerator(wasmBytes: Uint8Array): Promise<string> {
+  public async generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID> {
     if (!this.primaryWallet.selectedAddress) {
       throw new Error("not selected address")
     }
@@ -34,28 +35,19 @@ export class BitSeed implements APIInterface {
       address: this.primaryWallet.selectedAddress,
       publicKey: this.primaryWallet.publicKey,
       changeAddress: this.primaryWallet.selectedAddress,
-      destinationAddress: this.primaryWallet.selectedAddress,
+      destinationAddress: opts?.destination || this.primaryWallet.selectedAddress,
       mediaContent: base64Wasm,
       mediaType: "application/wasm",
-      feeRate: 1,
-      meta: { // Flexible object: Record<string, any>
-        title: "Bitseed simple generator",
-        desc: "A simple BitSeed generator",
-        slug: "cool-digital-artifact",
-        creator: {
-          name: "Rooch Network",
-          X: "https://twitter.com/RoochNetwork",
-          address: this.primaryWallet.selectedAddress
-        }
-      },
-      postage: 600 // base value of the inscription in sats
+      feeRate: opts?.fee_rate || 1,
+      meta: opts?.meta || {},
+      postage: opts?.postage || 600 // base value of the inscription in sats
     });
 
     const revealed = await wasmInscription.generateCommit();
 
     // deposit revealFee to address
     console.log("revealed:", revealed) 
-    await this.depositRevealFee(revealed)
+    await this.depositRevealFee(revealed, opts)
 
     if (await wasmInscription.isReady({skipStrictSatsCheck: false})) {
       await wasmInscription.build();
@@ -63,24 +55,22 @@ export class BitSeed implements APIInterface {
       const signedTxHex = this.primaryWallet.signPsbt(wasmInscription.toHex(), { isRevealTx: true });
 
       const wasmTx = await this.datasource.relay({ hex: signedTxHex });
-      return wasmTx as any;
+
+      return {
+        txid: wasmTx,
+        index: 0
+      };
     } else {
       throw new Error("WASM Inscription funding is not ready");
     }
   }
 
-  async deploy(tick: string, max: number, generator: Generator, opts?: DeployOptions | undefined): Promise<string> {
+  public async deploy(tick: string, max: number, generator: Generator, opts?: DeployOptions | undefined): Promise<InscriptionID> {
     if (!this.primaryWallet.selectedAddress) {
       throw new Error("not selected address")
     }
 
-    let generatorURI = '';
-
-    if (typeof generator === 'string') {
-      generatorURI = `/content/${generator}`;
-    } else {
-      throw new Error("Invalid generator type");
-    }
+    let generatorURI = `/content/${inscriptionIDToString(generator)}`;
 
     const meta = {
       tick,
@@ -98,21 +88,12 @@ export class BitSeed implements APIInterface {
       address: this.primaryWallet.selectedAddress,
       publicKey: this.primaryWallet.publicKey,
       changeAddress: this.primaryWallet.selectedAddress,
-      destinationAddress: this.primaryWallet.selectedAddress,
+      destinationAddress: opts?.destination || this.primaryWallet.selectedAddress,
       mediaContent: JSON.stringify(meta),
       mediaType: "application/json",
-      feeRate: 1,
-      meta: { // Flexible object: Record<string, any>
-        title: "Bitseed tick",
-        desc: `A simple BitSeed tick ${tick}`,
-        slug: "cool-digital-artifact",
-        creator: {
-          name: "Rooch Network",
-          X: "https://twitter.com/RoochNetwork",
-          address: this.primaryWallet.selectedAddress
-        }
-      },
-      postage: 600 // base value of the inscription in sats
+      feeRate: opts?.fee_rate || 1,
+      meta: opts?.meta || {},
+      postage: opts?.postage || 600 // base value of the inscription in sats
     })
 
     // generate deposit address and fee for inscription
@@ -120,10 +101,18 @@ export class BitSeed implements APIInterface {
 
     // deposit revealFee to address
     console.log("revealed:", revealed) 
-    await this.depositRevealFee(revealed)
+    await this.depositRevealFee(revealed, opts)
+
+    let ready = true
+    try {
+      await transaction.fetchAndSelectSuitableUnspent({ skipStrictSatsCheck: false })
+    } catch (error) {
+      console.log('fetchAndSelectSuitableUnspent erorr:', error)
+      ready = false
+    }
 
     // confirm if deposit address has been funded
-    if (await transaction.isReady({skipStrictSatsCheck: false})) {
+    if (ready || await transaction.isReady({skipStrictSatsCheck: false})) {
       // build transaction
       await transaction.build();
 
@@ -134,16 +123,19 @@ export class BitSeed implements APIInterface {
       const txId = await this.datasource.relay({ hex: signedTxHex });
       console.log("txId:", txId);
 
-      return txId
+      return {
+        txid: txId,
+        index: 0
+      }
     } else {
       throw new Error("transaction not ready");
     }
   }
 
-  async depositRevealFee(revealed: {
+  private async depositRevealFee(revealed: {
       address: string;
       revealFee: number;
-  }) {
+  }, opts?: InscribeOptions) {
     if (!this.fundingWallet.selectedAddress) {
       throw new Error("not selected address")
     }
@@ -156,24 +148,24 @@ export class BitSeed implements APIInterface {
           value: revealed.revealFee
       }],
       network: this.fundingWallet.network,
-      satsPerByte: 1,
+      satsPerByte: opts?.commit_fee_rate || opts?.fee_rate || 1,
     })
 
     const signedTxHex = await this.fundingWallet.signPsbt(psbt.hex)
     const txId = await this.datasource.relay({ hex: signedTxHex })
 
-    console.log({ txId })
+    console.log('depositRevealFee txId:', txId)
   }
 
-  mint(tick: string, amt: number, attributes?: Map<string, string> | undefined): Promise<string> {
+  public async mint(tickInscriptionId: InscriptionID, amt: number, attributes: Map<string, string>, opts?: InscribeOptions): Promise<InscriptionID> {
     throw new Error('Method not implemented.')
   }
 
-  merge(a: string, b: string): Promise<string> {
+  public async merge(a: InscriptionID, b: InscriptionID): Promise<InscriptionID> {
     throw new Error('Method not implemented.')
   }
 
-  split(a: string): Promise<[string, string]> {
+  public async split(a: InscriptionID): Promise<[InscriptionID, InscriptionID]> {
     throw new Error('Method not implemented.')
   }
 

@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
-import bip39 from 'bip39'
 import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Ordit } from "@sadoprotocol/ordit-sdk";
-import { BitSeed, BitSeedApiMock, Generator, InscriptionID, DeployOptions } from '../../src';
+import { BitSeed, BitSeedApiMock, Generator, InscriptionID, DeployOptions, parseInscriptionID, inscriptionIDToString } from '../../src';
 
 const network = "testnet";
 const datasource = new JsonRpcDatasource({ network });
@@ -15,16 +14,18 @@ export default function DeployStory() {
   const [generatorType, setGeneratorType] = useState<"Bytes" | "InscriptionID" | "File">("Bytes");
   const [generatorValue, setGeneratorValue] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
-  const [deployResult, setDeployResult] = useState<string | undefined>(undefined);
+  const [deployResult, setDeployResult] = useState<InscriptionID | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // address: tb1pz9qq9gwemapvmpntw90ygalhnjzgy2d7tglts0a90avrre902z2sh3ew0h
     const primaryWallet = new Ordit({
       wif: "cNGdjKojxE7nCcYdK34d12cdYTzBdDV4VdXdbpG7SHGTRWuCxpAW",
       network,
       type: 'taproot'
     });
 
+    // address: tb1p2lsktn6x2eq5h7wfk50xfrr2hlpjhp7q0gget6p4957hy2swt3jsar6zny
     const fundingWallet = new Ordit({
       wif: "cTW1Q2A8AVBuJ1sEBoV9gWokc6e5NYFPHxez6hhriVL2jKH6bfct",
       network,
@@ -44,23 +45,11 @@ export default function DeployStory() {
     console.log("handle deploy start")
 
     try {
-      let generator: Generator;
-      switch (generatorType) {
-        case "Bytes":
-          generator = new Uint8Array(Buffer.from(generatorValue, 'base64')); // Assuming base64 input for bytes
-          break;
-        case "InscriptionID":
-          generator = generatorValue as InscriptionID;
-          break;
-        case "File":
-          if (!file) throw new Error("File is required for File generator type");
-          generator = await readFileAsBytes(file); // Convert file to bytes
-          break;
-        default:
-          throw new Error("Invalid generator type");
-      }
+      let generator = parseInscriptionID(generatorValue);
 
-      const deployOptions: DeployOptions = {/* ... */}; // Replace with actual options if needed
+      const deployOptions: DeployOptions = {
+        fee_rate: 1,
+      };
 
       const inscriptionId = await bitseed.deploy(tick, max, generator, deployOptions);
       setDeployResult(inscriptionId);
@@ -125,7 +114,7 @@ export default function DeployStory() {
         )}
         <button onClick={handleDeploy}>Deploy</button>
       </div>
-      {deployResult && <div>Deploy Result: {deployResult}</div>}
+      {deployResult && <div>Deploy Result: {inscriptionIDToString(deployResult)}</div>}
       {error && <div>Error: {error}</div>}
     </div>
   );
