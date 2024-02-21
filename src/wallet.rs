@@ -1,9 +1,11 @@
+use anyhow::ensure;
 use anyhow::{anyhow, bail, Result};
 use bitcoin::Address;
 use bitcoin::OutPoint;
 use bitcoin::TxOut;
 use bitcoincore_rpc::RpcApi;
 use clap::Parser;
+use ord::inscriptions::ParsedEnvelope;
 use ord::templates::inscription::InscriptionJson;
 use ord::templates::status::StatusJson;
 use ord::Chain;
@@ -14,6 +16,7 @@ use reqwest::Url;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use crate::operation::Operation;
 
 #[derive(Debug, Clone, Parser)]
 pub struct WalletOption {
@@ -150,5 +153,24 @@ impl Wallet {
             })
             .map(|(outpoint, _amount)| *outpoint)
             .ok_or_else(|| anyhow!("wallet contains no cardinal utxos"))
+    }
+
+    pub fn get_operation_by_inscription_id(
+        &self,
+        inscription_id: InscriptionId,
+    ) -> Result<Operation> {
+        let inscription_json = self.get_inscription(inscription_id)?;
+        let tx = self.get_raw_transaction(&inscription_json.inscription_id.txid)?;
+        let inscriptions = ParsedEnvelope::from_transaction(&tx);
+        //TODO do we support batch inscriptions?
+        ensure!(
+            inscriptions.len() == 1,
+            "bitseed transaction must have exactly one inscription"
+        );
+        let envelope = inscriptions
+            .into_iter()
+            .next()
+            .expect("inscriptions length checked");
+        Operation::from_inscription(envelope.payload)
     }
 }

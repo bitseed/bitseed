@@ -123,7 +123,7 @@ impl BitseedInscription {
 
     pub fn get_metadata_value(&self, key: &str) -> Result<Value> {
         self.get_metadata_value_opt(key)
-            .ok_or_else(|| anyhow!("key not found"))
+            .ok_or_else(|| anyhow!("key ({:?}) not found in metadata", key))
     }
 
     pub fn get_metadata_value_opt(&self, key: &str) -> Option<Value> {
@@ -179,18 +179,13 @@ impl BitseedInscription {
         })
     }
 
-    pub fn content(&self) -> Result<Content> {
-        let content_type = self
-            .inscription
-            .content_type()
-            .ok_or_else(|| anyhow!("content_type not found"))?;
-        let body = self
-            .inscription
-            .body()
-            .ok_or_else(|| anyhow!("body not found"))?;
-        Ok(Content {
-            content_type: content_type.to_owned(),
-            body: body.to_vec(),
-        })
+    pub fn content(&self) -> Option<Content> {
+        let content_type = self.inscription.content_type();
+        let body = self.inscription.body();
+        if let (Some(content_type), Some(body)) = (content_type, body) {
+            Some(Content::new(content_type.to_owned(), body.to_vec()))
+        } else {
+            None
+        }
     }
 }
