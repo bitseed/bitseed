@@ -1,5 +1,6 @@
 
 import { InscriptionID } from "./generator"
+import { DeployArg } from "./deploy_arg"
 
 export type Tick = {
   tick: string,
@@ -7,5 +8,5 @@ export type Tick = {
   generator: InscriptionID,
   repeat: number,
   has_user_input: boolean,
-  deploy_args: Map<string, string>
+  deploy_args: Array<DeployArg>
 }

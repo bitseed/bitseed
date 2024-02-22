@@ -1,6 +1,6 @@
 
-import { IGenerator, DeployArg } from './interface';
-import { SFT } from '../types';
+import { IGenerator } from './interface';
+import { SFT, DeployArg } from '../types';
 
 export class WasmGenerator implements IGenerator {
   private wasmInstance: WebAssembly.Instance;

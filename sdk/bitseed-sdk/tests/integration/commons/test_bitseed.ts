@@ -1,10 +1,10 @@
 import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
 import { Ordit } from "@sadoprotocol/ordit-sdk";
-import { BitSeed, BitSeedApiMock } from '../../../src';
+import { BitSeed, GeneratorLoader } from '../../../src';
 
 const network = "testnet";
 const datasource = new JsonRpcDatasource({ network });
-const bitseedApiMock = new BitSeedApiMock();
+const generatorLoader = new GeneratorLoader(datasource);
 
 export function createTestBitSeed(): BitSeed {
   // address: tb1pz9qq9gwemapvmpntw90ygalhnjzgy2d7tglts0a90avrre902z2sh3ew0h
@@ -24,7 +24,7 @@ export function createTestBitSeed(): BitSeed {
   console.log("primary wallet address:", primaryWallet.selectedAddress)
   console.log("funding wallet address:", fundingWallet.selectedAddress)
 
-  const bitseed = new BitSeed(primaryWallet, fundingWallet, datasource, bitseedApiMock);
+  const bitseed = new BitSeed(primaryWallet, fundingWallet, datasource, generatorLoader);
 
   return bitseed;
 }

@@ -5,21 +5,18 @@ import { Inscriber, Ordit, ordit } from "@sadoprotocol/ordit-sdk"
 import { InscriptionID, Generator, Tick } from './types'
 import { inscriptionIDToString } from './utils'
 import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
-import { RoochBitSeedApiInterface } from './api'
 import { IGeneratorLoader } from "./generator";
 
 export class BitSeed implements APIInterface {
   private primaryWallet: Ordit;
   private fundingWallet: Ordit;
   private datasource: JsonRpcDatasource;
-  private bitSeedApi: RoochBitSeedApiInterface;
   private generatorLoader: IGeneratorLoader;
 
-  constructor(primaryWallet: Ordit, fundingWallet: Ordit, datasource: JsonRpcDatasource, bitSeedApi: RoochBitSeedApiInterface, generatorLoader: IGeneratorLoader) {
+  constructor(primaryWallet: Ordit, fundingWallet: Ordit, datasource: JsonRpcDatasource, generatorLoader: IGeneratorLoader) {
     this.primaryWallet = primaryWallet;
     this.fundingWallet = fundingWallet;
     this.datasource = datasource;
-    this.bitSeedApi = bitSeedApi;
     this.generatorLoader = generatorLoader;
   }
 
@@ -225,8 +222,14 @@ export class BitSeed implements APIInterface {
     }
   }
 
-  private async getTickByInscriptionId(insId: InscriptionID): Promise<Tick> {
-    throw new Error('Method not implemented.')
+  private async getTickByInscriptionId(inscription_id: InscriptionID): Promise<Tick> {
+    const tickInscription = await this.datasource.getInscription({
+      id: inscriptionIDToString(inscription_id),
+      decodeMetadata: false,
+    })
+
+    const tick = JSON.parse(tickInscription.mediaContent) as Tick
+    return tick
   }
 
   public async merge(a: InscriptionID, b: InscriptionID): Promise<InscriptionID> {
