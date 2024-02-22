@@ -1,7 +1,16 @@
 import { InscriptionID, SFT } from "../types";
 
+export type DeployArgValue = {
+  type: string,
+  data: any,
+}
+
+export type DeployArg = {
+  [key: string]: DeployArgValue;
+}
+
 export interface IGenerator {
-  inscribeGenerate(deployArgs: Map<string, string>, seed: string, userInput: string): Promise<SFT>
+  inscribeGenerate(deployArgs: Array<DeployArg>, seed: string, userInput: string): Promise<SFT>
 }
 
 export interface IGeneratorLoader {

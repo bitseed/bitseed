@@ -15,12 +15,26 @@ describe('WasmGenerator', () => {
     const generator = await loadWasmModuleFromFile(path.resolve(__dirname, '../../tests/data/generator.wasm'))
 
     // 准备测试数据
-    const deployArgs = new Map<string, string>([['key1', 'value1']]);
+    const deployArgs = [
+      {
+        "amount": {
+          type: "range",
+          data: {
+            min: 1,
+            max: 1000,
+          }
+        }
+      }
+    ];
+
     const seed = 'testSeed';
     const userInput = 'testUserInput';
 
     // 调用inscribeGenerate方法
     const result = await generator.inscribeGenerate(deployArgs, seed, userInput);
-    expect(result).toBe({})
+
+    // Assert that result has properties "id" and "amount"
+    expect(result).toHaveProperty("id");
+    expect(result).toHaveProperty("amount");
   });
 });
