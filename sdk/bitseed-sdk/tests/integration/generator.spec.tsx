@@ -12,7 +12,7 @@ test('Deploy generator', async ({ mount }) => {
   const inscriptionId = 'dd1f515b828eedabd6b0be147cf611ca08c20f39058feee9b96efaa2eba43d9di0';
 
   // Upload generator wasm file
-  await component.locator('input[placeholder="wasmFile"]').setInputFiles(path.join(__dirname, './data/generator.wasm'))
+  await component.locator('input[placeholder="wasmFile"]').setInputFiles(path.join(__dirname, '../data/generator.wasm'))
 
   // Click the deploy button
   await component.locator('button:has-text("Deploy")').click();

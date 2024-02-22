@@ -172,7 +172,7 @@ export class BitSeed implements APIInterface {
 
     let tick = await this.getTickByInscriptionId(tickInscriptionId)
     const generator = await this.generatorLoader.load(tick.generator)
-    const meta = generator.inscribeGenerate(tick.deploy_args, opts?.satpoint, userInput)
+    const meta = await generator.inscribeGenerate(tick.deploy_args, opts?.satpoint, userInput)
 
     console.log("SFT meta:", meta)
 

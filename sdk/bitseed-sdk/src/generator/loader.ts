@@ -22,10 +22,6 @@ export class GeneratorLoader implements IGeneratorLoader{
     console.log("wasmInscription:", wasmInscription)
 
     const wasmBytes = fromB64(wasmInscription.mediaContent);
-
-    const module = await WebAssembly.compile(wasmBytes);
-    const instance = await WebAssembly.instantiate(module);
-
-    return new WasmGenerator(instance)
+    return await WasmGenerator.loadWasmModule(wasmBytes)
   }
 }
