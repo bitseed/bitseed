@@ -6,7 +6,7 @@
   "main": "index.js",
   "repository": "https://github.com/bitseed/bitseed",
   "author": "RoochTeam",
-  "license": "MIT",
+  "license": "Apache 2.0",
   "private": false,
   "scripts": {
     "build": "tsup",
