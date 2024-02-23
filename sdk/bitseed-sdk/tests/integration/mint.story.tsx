@@ -1,56 +1,74 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react'
 
-import { BitSeed, InscriptionID, parseInscriptionID, inscriptionIDToString, InscribeOptions } from '../../src'
+import {
+  BitSeed,
+  InscriptionID,
+  parseInscriptionID,
+  inscriptionIDToString,
+  InscribeOptions,
+} from '../../src'
 import { createTestBitSeed } from './commons/test_bitseed'
 
 export default function MintStory() {
-  const [bitseed, setBitseed] = useState<BitSeed | undefined>(undefined);
+  const [bitseed, setBitseed] = useState<BitSeed | undefined>(undefined)
 
-  const [tickDeployInscriptionID, setTickDeployInscriptionID] = useState<string>('');
-  const [userInput, setUserInput] = useState<string>('');
+  const [tickDeployInscriptionID, setTickDeployInscriptionID] = useState<string>('')
+  const [userInput, setUserInput] = useState<string>('')
 
-  const [mintResult, setMintResult] = useState<InscriptionID | undefined>(undefined);
-  const [error, setError] = useState<string | undefined>(undefined);
+  const [mintResult, setMintResult] = useState<InscriptionID | undefined>(undefined)
+  const [error, setError] = useState<string | undefined>(undefined)
 
   useEffect(() => {
-    setBitseed(createTestBitSeed());
-  }, []);
+    setBitseed(createTestBitSeed())
+  }, [])
 
   const handleMint = async () => {
-    if (!bitseed) return;
+    if (!bitseed) return
 
-    console.log("handle mint tick")
+    console.log('handle mint tick')
 
     try {
-      let tick = parseInscriptionID(tickDeployInscriptionID);
+      let tick = parseInscriptionID(tickDeployInscriptionID)
       const mintOptions: InscribeOptions = {
         fee_rate: 1,
-      };
+      }
 
-      const inscriptionId = await bitseed.mint(tick, userInput, mintOptions);
-      console.log("mint ok, inscriptionId:", inscriptionId)
+      const inscriptionId = await bitseed.mint(tick, userInput, mintOptions)
+      console.log('mint ok, inscriptionId:', inscriptionId)
 
-      setMintResult(inscriptionId);
-      setError(undefined);
+      setMintResult(inscriptionId)
+      setError(undefined)
     } catch (e) {
-      console.log("mint error:", e)
-      setError(e.message);
-      setMintResult(undefined);
+      console.log('mint error:', e)
+      setError(e.message)
+      setMintResult(undefined)
     }
-  };
+  }
 
   return (
     <div>
+      <div>Mint Tick</div>
       <div>
-        Mint Tick
-      </div>
-      <div>
-        TickDeployID: <input type="text" placeholder="TickDeployID" value={tickDeployInscriptionID} onChange={(e) => setTickDeployInscriptionID(e.target.value)} /> <br/>
-        UserInput: <input type="text" placeholder="UserInput" value={userInput} onChange={(e) => setUserInput(e.target.value)} /> <br/>
-        <button onClick={handleMint}>Mint</button> 
+        TickDeployID:{' '}
+        <input
+          type="text"
+          placeholder="TickDeployID"
+          value={tickDeployInscriptionID}
+          onChange={(e) => setTickDeployInscriptionID(e.target.value)}
+        />{' '}
+        <br />
+        UserInput:{' '}
+        <input
+          type="text"
+          placeholder="UserInput"
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
+        />{' '}
+        <br />
+        <button onClick={handleMint}>Mint</button>
       </div>
       {mintResult && <div>Mint Result: {inscriptionIDToString(mintResult)}</div>}
       {error && <div>Error: {error}</div>}
     </div>
-  );
+  )
 }

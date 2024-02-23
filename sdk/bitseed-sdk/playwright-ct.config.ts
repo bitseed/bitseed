@@ -1,7 +1,7 @@
-import { defineConfig, devices } from '@playwright/experimental-ct-react';
-import react from '@vitejs/plugin-react';
-import wasm from 'vite-plugin-wasm';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
+import { defineConfig, devices } from '@playwright/experimental-ct-react'
+import react from '@vitejs/plugin-react'
+import wasm from 'vite-plugin-wasm'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -32,7 +32,7 @@ export default defineConfig({
 
     ctViteConfig: {
       build: {
-        sourcemap: true
+        sourcemap: true,
       },
       plugins: [
         react(),
@@ -72,4 +72,4 @@ export default defineConfig({
     },
     */
   ],
-});
+})

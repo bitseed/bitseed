@@ -1,10 +1,8 @@
-
 export type DeployArgValue = {
-  type: string,
-  data: any,
+  type: string
+  data: any
 }
 
 export type DeployArg = {
-  [key: string]: DeployArgValue;
+  [key: string]: DeployArgValue
 }
-

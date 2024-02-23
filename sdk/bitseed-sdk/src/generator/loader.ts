@@ -1,13 +1,12 @@
-
-import { JsonRpcDatasource } from "@sadoprotocol/ordit-sdk";
+import { JsonRpcDatasource } from '@sadoprotocol/ordit-sdk'
 
 import { InscriptionID } from '../types'
-import { inscriptionIDToString, fromB64 } from "../utils";
+import { inscriptionIDToString, fromB64 } from '../utils'
 import { IGenerator, IGeneratorLoader } from './interface'
 import { WasmGenerator } from './wasm_generator'
 
-export class GeneratorLoader implements IGeneratorLoader{
-  private datasource: JsonRpcDatasource;
+export class GeneratorLoader implements IGeneratorLoader {
+  private datasource: JsonRpcDatasource
 
   constructor(datasource: JsonRpcDatasource) {
     this.datasource = datasource
@@ -19,9 +18,9 @@ export class GeneratorLoader implements IGeneratorLoader{
       decodeMetadata: false,
     })
 
-    console.log("wasmInscription:", wasmInscription)
+    console.log('wasmInscription:', wasmInscription)
 
-    const wasmBytes = fromB64(wasmInscription.mediaContent);
+    const wasmBytes = fromB64(wasmInscription.mediaContent)
     return await WasmGenerator.loadWasmModule(wasmBytes)
   }
 }
