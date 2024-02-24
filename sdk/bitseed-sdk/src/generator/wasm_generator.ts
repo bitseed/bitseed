@@ -1,5 +1,5 @@
 import { IGenerator } from './interface'
-import { SFT, DeployArg } from '../types'
+import { SFTRecord, DeployArg } from '../types'
 
 export class WasmGenerator implements IGenerator {
   private wasmInstance: WebAssembly.Instance
@@ -12,14 +12,14 @@ export class WasmGenerator implements IGenerator {
     deployArgs: Array<DeployArg>,
     seed: string,
     userInput: string,
-  ): Promise<SFT> {
-    // 将 deployArgs 转换为 JSON 字符串
+  ): Promise<SFTRecord> {
+    // Convert deployArgs to a JSON string
     const attrs = JSON.stringify(deployArgs)
 
-    // 获取 WASM 实例的内存
+    // Get the memory of the WASM instance
     const memory = this.wasmInstance.exports.memory as WebAssembly.Memory
 
-    // 分配内存并写入字符串数据
+    // Allocate memory and write string data
     const encodeStringOnStack = (str: string, memory: WebAssembly.Memory) => {
       const encoder = new TextEncoder()
       const encodedString = encoder.encode(str + '\0') // Include null-terminator
@@ -46,12 +46,12 @@ export class WasmGenerator implements IGenerator {
       }
     }
 
-    // 将 seed 和 userInput 编码并写入 WASM 内存
+    // Encode seed and userInput and write them into WASM memory
     const seedEncoded = encodeStringOnStack(seed, memory)
     const userInputEncoded = encodeStringOnStack(userInput, memory)
     const attrsEncoded = encodeStringOnStack(attrs, memory)
 
-    // 调用 WASM 函数
+    // Call the WASM function
     const inscribeGenerateFunction = this.wasmInstance.exports.inscribe_generate as CallableFunction
     const resultPtr = inscribeGenerateFunction(
       seedEncoded.ptr,
@@ -59,7 +59,7 @@ export class WasmGenerator implements IGenerator {
       attrsEncoded.ptr,
     )
 
-    // 读取 WASM 内存中的结果字符串
+    // Read the result string from WASM memory
     const decodeString = (ptr: number, memory: WebAssembly.Memory) => {
       const decoder = new TextDecoder()
       const dataView = new DataView(memory.buffer)
@@ -72,16 +72,15 @@ export class WasmGenerator implements IGenerator {
     }
 
     const result = decodeString(resultPtr, memory)
-    console.log('result:', result)
 
     seedEncoded.free()
     userInputEncoded.free()
     attrsEncoded.free()
 
-    // 将结果字符串转换为 JSON 对象
-    const sft: SFT = JSON.parse(result)
+    // Convert the result string into a JSON object
+    const sft: SFTRecord = JSON.parse(result)
 
-    // 返回 SFT 对象
+    // Return the SFT object
     return sft
   }
 

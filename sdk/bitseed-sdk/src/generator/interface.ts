@@ -1,7 +1,7 @@
-import { InscriptionID, SFT, DeployArg } from '../types'
+import { InscriptionID, SFTRecord, DeployArg } from '../types'
 
 export interface IGenerator {
-  inscribeGenerate(deployArgs: Array<DeployArg>, seed: string, userInput: string): Promise<SFT>
+  inscribeGenerate(deployArgs: Array<DeployArg>, seed: string, userInput: string): Promise<SFTRecord>
 }
 
 export interface IGeneratorLoader {

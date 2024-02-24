@@ -1,4 +1,4 @@
-import { Generator, InscriptionID } from '../types'
+import { Generator, InscriptionID, DeployArg } from '../types'
 
 // Define custom types that would be used in the interface
 type SatPoint = any // Replace 'any' with the actual type definition
@@ -51,11 +51,10 @@ export interface InscribeOptions {
 export interface DeployOptions extends InscribeOptions {
   repeat?: string
   has_user_input?: boolean
-  deploy_args?: Map<string, string>
+  deploy_args?: Array<DeployArg>
 }
 
 export interface APIInterface {
-  name(): string
   generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID>
   deploy(
     tick: string,

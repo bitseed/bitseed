@@ -1,6 +1,12 @@
-export type SFT = {
-  p: string
+export type SFTContent = {
+  content_type: string,
+  body: Uint8Array
+}
+
+export type SFTRecord = {
+  op: string,
   tick: string
-  amt: number
-  attributes?: Map<string, string>
+  amount: number
+  attributes?: Map<string, string>,
+  content?: SFTContent
 }

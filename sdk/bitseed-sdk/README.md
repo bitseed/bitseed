@@ -24,8 +24,8 @@ yarn add bitseed-sdk
 
 For usage examples, please refer to the integration test stories located at:
 
-- `tests/integration/deploy.story.tsx`
 - `tests/integration/generator.story.tsx`
+- `tests/integration/deploy.story.tsx`
 - `tests/integration/mint.story.tsx`
 
 These stories provide practical examples of how to use the SDK for deploying generators, minting assets, and more.

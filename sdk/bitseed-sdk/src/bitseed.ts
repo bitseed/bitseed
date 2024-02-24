@@ -1,7 +1,7 @@
 import { JsonRpcDatasource } from '@sadoprotocol/ordit-sdk'
 import { Inscriber, Ordit, ordit } from '@sadoprotocol/ordit-sdk'
 
-import { InscriptionID, Generator, Tick } from './types'
+import { InscriptionID, Generator, Tick, SFTRecord } from './types'
 import { inscriptionIDToString, toB64 } from './utils'
 import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
 import { IGeneratorLoader } from './generator'
@@ -22,10 +22,6 @@ export class BitSeed implements APIInterface {
     this.fundingWallet = fundingWallet
     this.datasource = datasource
     this.generatorLoader = generatorLoader
-  }
-
-  public name(): string {
-    return 'bitseed'
   }
 
   public async generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID> {
@@ -67,6 +63,61 @@ export class BitSeed implements APIInterface {
       }
     } else {
       throw new Error('WASM Inscription funding is not ready')
+    }
+  }
+
+  public async inscribe(sft: SFTRecord, opts?: InscribeOptions): Promise<InscriptionID> {
+    if (!this.primaryWallet.selectedAddress) {
+      throw new Error('not selected address')
+    }
+
+    let meta = {
+      ...sft.attributes
+    }
+
+    let content = {
+      content_type: "",
+      body: new Uint8Array()
+    }
+
+    if (sft.content) {
+      content = sft.content
+    }
+
+    const base64Wasm = toB64(content.body)
+
+    const wasmInscription = new Inscriber({
+      network: this.primaryWallet.network,
+      address: this.primaryWallet.selectedAddress,
+      publicKey: this.primaryWallet.publicKey,
+      changeAddress: this.primaryWallet.selectedAddress,
+      destinationAddress: opts?.destination || this.primaryWallet.selectedAddress,
+      mediaContent: base64Wasm,
+      mediaType: content.content_type,
+      feeRate: opts?.fee_rate || 1,
+      meta: meta,
+      postage: opts?.postage || 600, // base value of the inscription in sats
+    })
+
+    const revealed = await wasmInscription.generateCommit()
+
+    // deposit revealFee to address
+    console.log('revealed:', revealed)
+    await this.depositRevealFee(revealed, opts)
+
+    if (await wasmInscription.isReady({ skipStrictSatsCheck: false })) {
+      await wasmInscription.build()
+
+      const signedTxHex = this.primaryWallet.signPsbt(wasmInscription.toHex(), { isRevealTx: true })
+
+      const wasmTx = await this.datasource.relay({ hex: signedTxHex })
+
+      return {
+        txid: wasmTx,
+        index: 0,
+      }
+    } else {
+      throw new Error('inscriber is not ready')
     }
   }
 

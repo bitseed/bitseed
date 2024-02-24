@@ -16,7 +16,6 @@
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
     "prettier:fix": "prettier -w --ignore-unknown .",
-    "prettier:fixadasdasd": "prettier -w --ignore-unknown .",
     "eslint:check": "eslint --max-warnings=0 .",
     "eslint:fix": "npm run eslint:check --fix",
     "lint": "npm run eslint:check && npm run prettier:check",

@@ -11,10 +11,10 @@ const loadWasmModuleFromFile = async(url: string) => {
 
 describe('WasmGenerator', () => {
   it('should call inscribe_generate with correct parameters', async () => {
-    // 创建WasmGenerator实例
+    // Create an instance of WasmGenerator
     const generator = await loadWasmModuleFromFile(path.resolve(__dirname, '../../tests/data/generator.wasm'))
 
-    // 准备测试数据
+    // Prepare test data
     const deployArgs = [
       {
         "amount": {
@@ -30,7 +30,7 @@ describe('WasmGenerator', () => {
     const seed = 'testSeed';
     const userInput = 'testUserInput';
 
-    // 调用inscribeGenerate方法
+    // Call the inscribeGenerate method
     const result = await generator.inscribeGenerate(deployArgs, seed, userInput);
 
     // Assert that result has properties "id" and "amount"
@@ -38,3 +38,4 @@ describe('WasmGenerator', () => {
     expect(result).toHaveProperty("amount");
   });
 });
+
