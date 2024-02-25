@@ -7,6 +7,8 @@ export type SFTRecord = {
   op: string,
   tick: string
   amount: number
-  attributes?: Map<string, string>,
+  attributes?:  {
+    [key: string]: any
+  },
   content?: SFTContent
 }

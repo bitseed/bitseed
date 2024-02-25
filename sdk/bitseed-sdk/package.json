@@ -6,7 +6,7 @@
   "main": "index.js",
   "repository": "https://github.com/bitseed/bitseed",
   "author": "RoochTeam",
-  "license": "Apache 2.0",
+  "license": "Apache-2.0",
   "private": false,
   "scripts": {
     "build": "tsup",
@@ -54,7 +54,7 @@
     "prettier": "^2.8.7"
   },
   "dependencies": {
-    "@sadoprotocol/ordit-sdk": "^2.3.12",
+    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-2.4.0.tgz",
     "@yubing744/rooch-sdk": "^0.1.0",
     "bip39": "^3.1.0",
     "bitcoinjs-lib": "^6.1.5",

@@ -21,13 +21,13 @@ export default function DeployGeneratorStory() {
     console.log('handle deploy start')
 
     try {
-      let generator = await readFileAsBytes(file)
+      let wasmBytes = await readFileAsBytes(file)
 
       const deployOptions: DeployOptions = {
         fee_rate: 1,
       }
 
-      const inscriptionId = await bitseed.generator(generator, deployOptions)
+      const inscriptionId = await bitseed.generator(wasmBytes, deployOptions)
       setDeployResult(inscriptionId)
       setError(undefined)
     } catch (e) {
