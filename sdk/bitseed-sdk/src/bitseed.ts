@@ -55,17 +55,28 @@ export class BitSeed implements APIInterface {
       mediaType: contentType,
       feeRate: opts?.fee_rate || 1,
       meta: meta,
-      postage: opts?.postage || 600, // base value of the inscription in sats
+      postage: opts?.postage || 1000, // base value of the inscription in sats
     })
 
     inscriber.withMetaProtocol(BITSEED_PROTOAL_NAME)
 
     const revealed = await inscriber.generateCommit()
+    console.log("revealed:", revealed)
 
     // deposit revealFee to address
     await this.depositRevealFee(revealed, opts)
 
-    if (await inscriber.isReady({ skipStrictSatsCheck: false })) {
+    let ready = false;
+
+    try {
+      await inscriber.fetchAndSelectSuitableUnspent({ skipStrictSatsCheck: true })
+      ready = true
+    } catch (error) {
+      console.log("inscribe error:", error)
+      ready = false
+    }
+
+    if (ready || await inscriber.isReady({ skipStrictSatsCheck: true })) {
       await inscriber.build()
 
       const signedTxHex = this.primaryWallet.signPsbt(inscriber.toHex(), { isRevealTx: true })

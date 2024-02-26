@@ -14,9 +14,9 @@ export function createTestBitSeed(): BitSeed {
     type: 'taproot',
   })
 
-  // address: tb1p2lsktn6x2eq5h7wfk50xfrr2hlpjhp7q0gget6p4957hy2swt3jsar6zny
+  // address: tb1pk6w56zalwe0txflwedv6d4mzszu4334ehtqe2yyjv8m2g36xlgrs7m68qv
   const fundingWallet = new Ordit({
-    wif: 'cTW1Q2A8AVBuJ1sEBoV9gWokc6e5NYFPHxez6hhriVL2jKH6bfct',
+    wif: 'cNfgnR9UB1garDrQ3WVaQ2LbG4CPxpuEepor44yyuiB8wtSa3Bta',
     network,
     type: 'taproot',
   })
