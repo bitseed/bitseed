@@ -13,7 +13,8 @@ export enum AddressType {
 
 export enum NetworkType {
   MAINNET,
-  TESTNET
+  TESTNET,
+  REGTEST,
 }
 
 export enum RestoreWalletType {
@@ -337,4 +338,94 @@ export interface VersionDetail {
   version: string;
   title: string;
   changelogs: string[];
+}
+
+export declare enum RarityEnum {
+  COMMON = "common",
+  UNCOMMON = "uncommon",
+  RARE = "rare",
+  EPIC = "epic",
+  LEGENDARY = "legendary",
+  MYTHIC = "mythic"
+}
+export type Rarity = `${RarityEnum}`;
+export interface Ordinal {
+  number: number;
+  decimal: string;
+  degree: string;
+  name: string;
+  height: number;
+  cycle: number;
+  epoch: number;
+  period: number;
+  offset: number;
+  rarity: Rarity;
+  output: string;
+  start: number;
+  size: number;
+}
+
+export interface Inscription {
+  id: string;
+  outpoint: string;
+  owner: string;
+  genesis: string;
+  fee: number;
+  height: number;
+  number: number;
+  sat: number;
+  timestamp: number;
+  mediaType: string;
+  mediaSize: number;
+  mediaContent: string;
+  meta?: Record<string, any>;
+  value?: number;
+}
+
+export type Vout = {
+  value: number;
+  n: number;
+  ordinals: Ordinal[];
+  inscriptions: Inscription[];
+  spent: string | false;
+  sats: number;
+  scriptPubKey: {
+      asm: string;
+      desc: string;
+      hex: string;
+      reqSigs?: number;
+      type: string;
+      addresses?: string[];
+      address?: string;
+  };
+};
+export type Vin = {
+  txid: string;
+  vout: number;
+  scriptSig: {
+      asm: string;
+      hex: string;
+  };
+  txinwitness?: string[];
+  sequence: number;
+  value: number;
+};
+
+export interface Transaction {
+  hex?: string;
+  txid: string;
+  hash: string;
+  size: number;
+  vsize: number;
+  version: number;
+  locktime: number;
+  vin: Vin[];
+  vout: Vout[];
+  blockhash: string;
+  blockheight: number;
+  blocktime: number;
+  confirmations: number;
+  time: number;
+  weight: number;
+  fee: number;
 }

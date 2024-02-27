@@ -1,3 +1,4 @@
+import * as bitcoin from 'bitcoinjs-lib';
 import randomstring from 'randomstring';
 
 import { CHANNEL, OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET, VERSION } from './unisat-openapi.constants';
@@ -18,8 +19,11 @@ import {
   UTXO,
   UTXO_Detail,
   VersionDetail,
-  WalletConfig
+  WalletConfig,
+  Transaction
 } from './unisat-openapi.types';
+
+import { IUniSatOpenAPI } from './unisat-openapi.interface'
 
 interface OpenApiStore {
   host: string;
@@ -27,32 +31,25 @@ interface OpenApiStore {
   config?: WalletConfig;
 }
 
-const maxRPS = 100;
-
 enum API_STATUS {
   FAILED = -1,
   SUCCESS = 0
 }
 
-export class OpenApiService {
+export class UnisatOpenApi implements IUniSatOpenAPI {
   store!: OpenApiStore;
   networkType?: NetworkType
   clientAddress = '';
   addressFlag = 0;
 
-  setHost = async (host: string) => {
-    this.store.host = host;
-    await this.init();
-  };
-
-  getHost = () => {
-    return this.store.host;
-  };
+  constructor(networkType: NetworkType) {
+    this.networkType = networkType
+  }
 
   init = async () => {
     this.store = {
       host: OPENAPI_URL_MAINNET,
-        deviceId: randomstring.generate(12)
+      deviceId: randomstring.generate(12)
     };
 
     if (![OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET].includes(this.store.host)) {
@@ -81,6 +78,20 @@ export class OpenApiService {
     };
     getConfig();
   };
+
+  getHost() {
+    return this.store.host;
+  }
+
+  getNetwork(): bitcoin.Network {
+    if (this.networkType === NetworkType.REGTEST) {
+      return bitcoin.networks.regtest;
+    } else if (this.networkType == NetworkType.TESTNET){
+      return bitcoin.networks.testnet
+    } else {
+      return bitcoin.networks.bitcoin
+    }
+  }
 
   setClientAddress = async (token: string, flag: number) => {
     this.clientAddress = token;
@@ -233,6 +244,12 @@ export class OpenApiService {
     return this.httpGet('/default/app-summary-v2', {});
   }
 
+  async getTx(txid: string): Promise<Transaction> {
+    return this.httpGet('/tx/info', {
+      txid
+    });
+  }
+
   async pushTx(rawtx: string): Promise<string> {
     return this.httpPost('/tx/broadcast', {
       rawtx
@@ -346,5 +363,3 @@ export class OpenApiService {
     });
   }
 }
-
-export default new OpenApiService();
