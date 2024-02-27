@@ -1,4 +1,4 @@
-import { JsonRpcDatasource } from '@sadoprotocol/ordit-sdk'
+import { IDatasource } from '@sadoprotocol/ordit-sdk'
 import { Inscriber, Ordit, ordit } from '@sadoprotocol/ordit-sdk'
 
 import { BITSEED_PROTOAL_NAME } from './constants'
@@ -10,13 +10,13 @@ import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
 export class BitSeed implements APIInterface {
   private primaryWallet: Ordit
   private fundingWallet: Ordit
-  private datasource: JsonRpcDatasource
+  private datasource: IDatasource
   private generatorLoader: IGeneratorLoader
 
   constructor(
     primaryWallet: Ordit,
     fundingWallet: Ordit,
-    datasource: JsonRpcDatasource,
+    datasource: IDatasource,
     generatorLoader: IGeneratorLoader,
   ) {
     this.primaryWallet = primaryWallet

@@ -54,10 +54,11 @@
     "prettier": "^2.8.7"
   },
   "dependencies": {
-    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-2.4.0.tgz",
+    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-2.4.2.tgz",
     "@yubing744/rooch-sdk": "^0.1.0",
     "bip39": "^3.1.0",
     "bitcoinjs-lib": "^6.1.5",
-    "commander": "^10.0.0"
+    "commander": "^10.0.0",
+    "randomstring": "^1.2.3"
   }
 }
