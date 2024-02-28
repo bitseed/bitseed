@@ -1,7 +1,7 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import randomstring from 'randomstring';
 
-import { CHANNEL, OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET, VERSION } from './unisat-openapi.constants';
+import { CHANNEL, OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET, OPENAPI_URL_REGTEST, VERSION } from './unisat-openapi.constants';
 import {
   AddressSummary,
   AddressTokenSummary,
@@ -13,7 +13,6 @@ import {
   InscribeOrder,
   Inscription,
   InscriptionSummary,
-  NetworkType,
   TokenBalance,
   TokenTransfer,
   UTXO,
@@ -38,59 +37,34 @@ enum API_STATUS {
 
 export class UnisatOpenApi implements IUniSatOpenAPI {
   store!: OpenApiStore;
-  networkType?: NetworkType
+  network: bitcoin.Network
   clientAddress = '';
   addressFlag = 0;
 
-  constructor(networkType: NetworkType) {
-    this.networkType = networkType
-  }
+  constructor(network: bitcoin.Network) {
+    this.network = network
 
-  init = async () => {
     this.store = {
       host: OPENAPI_URL_MAINNET,
       deviceId: randomstring.generate(12)
     };
 
-    if (![OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET].includes(this.store.host)) {
-      const networkType = this.networkType;
-      if (networkType === NetworkType.MAINNET) {
-        this.store.host = OPENAPI_URL_MAINNET;
-      } else {
-        this.store.host = OPENAPI_URL_TESTNET;
-      }
+    const networkType = this.network;
+    if (networkType === bitcoin.networks.regtest) {
+      this.store.host = OPENAPI_URL_REGTEST;
+    } else if (networkType === bitcoin.networks.testnet){
+      this.store.host = OPENAPI_URL_TESTNET;
+    } else {
+      this.store.host = OPENAPI_URL_MAINNET;
     }
-
-    if (!this.store.deviceId) {
-      this.store.deviceId = randomstring.generate(12);
-    }
-
-    const getConfig = async () => {
-      try {
-        this.store.config = await this.getWalletConfig();
-      } catch (e) {
-        this.store.config = {
-          version: '0.0.0',
-          moonPayEnabled: true,
-          statusMessage: (e as any).message
-        };
-      }
-    };
-    getConfig();
-  };
+  }
 
   getHost() {
     return this.store.host;
   }
 
   getNetwork(): bitcoin.Network {
-    if (this.networkType === NetworkType.REGTEST) {
-      return bitcoin.networks.regtest;
-    } else if (this.networkType == NetworkType.TESTNET){
-      return bitcoin.networks.testnet
-    } else {
-      return bitcoin.networks.bitcoin
-    }
+    return this.network
   }
 
   setClientAddress = async (token: string, flag: number) => {
@@ -169,6 +143,31 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
 
     return this.getRespData(res);
   };
+
+  async loadContent(uri: string): Promise<ArrayBuffer> {
+    const headers = new Headers();
+    headers.append('X-Client', 'UniSat Wallet');
+    headers.append('X-Version', VERSION);
+    headers.append('x-address', this.clientAddress);
+    headers.append('x-flag', this.addressFlag + '');
+    headers.append('x-channel', CHANNEL);
+    headers.append('x-udid', this.store.deviceId);
+    let res: Response;
+    try {
+      res = await fetch(new Request(uri), { method: 'GET', headers, mode: 'cors', cache: 'default' });
+    } catch (e: any) {
+      throw new Error('Network error: ' + e && e.message);
+    }
+
+    if (!res) throw new Error('Network error, no response');
+    if (res.status !== 200) throw new Error('Network error with status: ' + res.status);
+
+    try {
+      return await res.arrayBuffer()
+    } catch (e) {
+      throw new Error('Network error, json parse error');
+    }
+  }
 
   async getWalletConfig(): Promise<WalletConfig> {
     return this.httpGet('/default/config', {});

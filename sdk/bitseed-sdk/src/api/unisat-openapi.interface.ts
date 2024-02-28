@@ -113,4 +113,6 @@ export interface IUniSatOpenAPI {
   getArc20Utxos(address: string, ticker: string): Promise<UTXO[]>;
 
   getVersionDetail(version: string): Promise<VersionDetail>;
+
+  loadContent(uri: string): Promise<ArrayBuffer>;
 }

@@ -18,7 +18,7 @@ describe('decodeScriptPubKey', () => {
     const result = decodeScriptPubKey(scriptPubKeyHex, network);
 
     expect(result.asm).toContain('OP_1 114002a1d9df42cd866b715e4477f79c848229be5a3eb83fa57f5831e4af5095');
-    expect(result.address).toBeNull()
+    expect(result.address).toBe('')
     expect(result.type).toBe('nonstandard');
   });
 
@@ -36,6 +36,6 @@ describe('decodeScriptPubKey', () => {
     const result = decodeScriptPubKey(nonStandardScriptPubKeyHex, network);
 
     expect(result.type).toBe('nonstandard');
-    expect(result.address).toBeNull();
+    expect(result.address).toBe('')
   });
 });

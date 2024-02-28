@@ -13,8 +13,6 @@ const classifyOutputScript = (script: Buffer): string => {
     try { 
       return paymentFn({ output: script }) !== undefined;
     } catch (e) {
-      // Optionally log the error or handle it as needed
-      console.error('Error classifying output script:', e);
       return false;
     }
   }

@@ -1,4 +1,4 @@
-import { AddressType, Chain, NetworkType, RestoreWalletType， CHAINS_ENUM } from './unisat-openapi.types';
+import { AddressType, Chain, NetworkType, RestoreWalletType, CHAINS_ENUM } from './unisat-openapi.types';
 
 export const CHAINS: Record<string, Chain> = {
   [CHAINS_ENUM.BTC]: {
@@ -52,31 +52,12 @@ export const KEYRING_TYPES: {
   }
 };
 
-export const IS_CHROME = /Chrome\//i.test(navigator.userAgent);
-
-export const IS_FIREFOX = /Firefox\//i.test(navigator.userAgent);
-
-export const IS_LINUX = /linux/i.test(navigator.userAgent);
-
-let chromeVersion: number | null = null;
-
-if (IS_CHROME) {
-  const matches = navigator.userAgent.match(/Chrome\/(\d+[^.\s])/);
-  if (matches && matches.length >= 2) {
-    chromeVersion = Number(matches[1]);
-  }
-}
-
-export const IS_AFTER_CHROME91 = IS_CHROME ? chromeVersion && chromeVersion >= 91 : false;
-
 export const GAS_LEVEL_TEXT = {
   slow: 'Standard',
   normal: 'Fast',
   fast: 'Instant',
   custom: 'Custom'
 };
-
-export const IS_WINDOWS = /windows/i.test(navigator.userAgent);
 
 export const LANGS = [
   {
@@ -229,6 +210,7 @@ export const INTERNAL_REQUEST_SESSION = {
 
 export const OPENAPI_URL_MAINNET = 'https://wallet-api.unisat.io/v5';
 export const OPENAPI_URL_TESTNET = 'https://wallet-api-testnet.unisat.io/v5';
+export const OPENAPI_URL_REGTEST = 'https://wallet-api-regtest.unisat.io/v5';
 
 export const EVENTS = {
   broadcastToUI: 'broadcastToUI',
