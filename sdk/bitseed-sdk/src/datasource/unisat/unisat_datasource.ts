@@ -3,12 +3,19 @@ import { Transaction as BTCTransaction } from "bitcoinjs-lib";
 import { GetBalanceOptions, GetInscriptionOptions, GetInscriptionsOptions, GetInscriptionUTXOOptions, GetSpendablesOptions, GetTransactionOptions, GetUnspentsOptions, GetUnspentsResponse, IDatasource, Inscription, RelayOptions, Transaction, UTXO, UTXOLimited } from "@sadoprotocol/ordit-sdk";
 import { IUniSatOpenAPI, unisatTypes } from "../../api";
 import { decodeScriptPubKey } from '../../utils/bitcoin';
+import { BitseedSDKError } from '../../errors';
 import { toB64 } from '../../utils';
+import { UnisatOpenApi } from '../../api'
+import { Network } from '../../types'
+
+interface UniSatDataSourceOptions {
+  network: Network;
+}
 export class UniSatDataSource implements IDatasource {
   private unisatOpenAPI: IUniSatOpenAPI
 
-  constructor(unisatOpenAPI: IUniSatOpenAPI) {
-    this.unisatOpenAPI = unisatOpenAPI;
+  constructor(opts: UniSatDataSourceOptions) {
+    this.unisatOpenAPI = new UnisatOpenApi(opts.network);
   }
 
   async getBalance({ address }: GetBalanceOptions): Promise<number> {
@@ -32,7 +39,6 @@ export class UniSatDataSource implements IDatasource {
 
   async getInscription({ id, decodeMetadata }: GetInscriptionOptions): Promise<Inscription> {
     const utxoDetail = await this.unisatOpenAPI.getInscriptionUtxoDetail(id);
-    console.log('utxoDetail:', utxoDetail)
 
     if (!utxoDetail || utxoDetail.inscriptions.length == 0) {
       throw new Error('inscription nil')
@@ -42,12 +48,22 @@ export class UniSatDataSource implements IDatasource {
     const content = await this.unisatOpenAPI.loadContent(inscription.content)
     const base64Content = toB64(new Uint8Array(content))
 
-    let meta = ""
+    let meta = {}
     if (decodeMetadata && utxoDetail && utxoDetail.inscriptions.length >= 2 ) {
       const metaInscription = utxoDetail.inscriptions[1]
       const metaBody = await this.unisatOpenAPI.loadContent(metaInscription.content)
-      meta = toB64(new Uint8Array(metaBody))
-      console.log("meta:", meta)
+
+      try {
+        const decoder = new TextDecoder('utf-8');
+        const decodedString = decoder.decode(new Uint8Array(metaBody));
+        meta = JSON.parse(decodedString)
+      } catch(e: any) {
+        console.log("decode meta error:", e)
+
+        throw new BitseedSDKError('decode meta error', {
+          cause: e,
+        })
+      }
     }
 
     return {
@@ -64,15 +80,31 @@ export class UniSatDataSource implements IDatasource {
       mediaSize: inscription.contentLength,
       mediaContent: base64Content,
       value: inscription.outputValue,
+      meta: meta,
     }
   }
 
-  async getInscriptions({ owner, limit }: GetInscriptionsOptions): Promise<Inscription[]> {
-    if (!owner) {
-      throw new Error('owner is undefine')
+  creator?: string;
+    owner?: string;
+    mimeType?: string;
+    mimeSubType?: string;
+    outpoint?: string;
+
+  async getInscriptions({ creator, owner, mimeType, mimeSubType, outpoint, limit }: GetInscriptionsOptions): Promise<Inscription[]> {
+    if (creator || mimeType || mimeSubType || outpoint) {
+      throw new BitseedSDKError('get options creator, mimeType, mimeSubType and outpoint not support')
     }
 
-    const resp = await this.unisatOpenAPI.getAddressInscriptions(owner, 0, limit || 10)
+    if (!owner) {
+      throw new BitseedSDKError('owner is required')
+    }
+
+    let size = 100;
+    if (limit) {
+      size = limit
+    }
+
+    const resp = await this.unisatOpenAPI.getAddressInscriptions(owner, 0, size)
     return Array.from(resp.list).map((inscription)=>{
       return {
         id: inscription.inscriptionId,
@@ -99,9 +131,9 @@ export class UniSatDataSource implements IDatasource {
     }
   }
 
-  async getSpendables({ address }: GetSpendablesOptions): Promise<UTXOLimited[]> {
+  async getSpendables({ address, value }: GetSpendablesOptions): Promise<UTXOLimited[]> {
     const utxos = await this.unisatOpenAPI.getBTCUtxos(address)
-    return Array.from(utxos).map((utxo)=>{
+    return Array.from(utxos).filter((utxo)=>utxo.satoshis >= value).map((utxo)=>{
       return {
         n: utxo.vout,
         txid: utxo.txid,
@@ -113,7 +145,7 @@ export class UniSatDataSource implements IDatasource {
 
   async getUnspents({ address }: GetUnspentsOptions): Promise<GetUnspentsResponse> {
     const utxos = await this.unisatOpenAPI.getBTCUtxos(address)
-    const spendableUTXOs = Array.from(utxos).map((utxo)=>{
+    const decodeUTXOs = Array.from(utxos).map((utxo)=>{
       return {
         n: utxo.vout,
         txid: utxo.txid,
@@ -124,16 +156,8 @@ export class UniSatDataSource implements IDatasource {
       }
     })
 
-    const unspendableUTXOs = Array.from(utxos).map((utxo)=>{
-      return {
-        n: utxo.vout,
-        txid: utxo.txid,
-        sats: utxo.satoshis,
-        scriptPubKey: decodeScriptPubKey(utxo.scriptPk, this.unisatOpenAPI.getNetwork()),
-        safeToSpend: utxoSpendable(utxo),
-        confirmation: -1,
-      }
-    })
+    const spendableUTXOs = Array.from(decodeUTXOs).filter((utxo)=>utxo.safeToSpend)
+    const unspendableUTXOs = Array.from(decodeUTXOs).filter((utxo)=>!utxo.safeToSpend)
 
     return {
       totalUTXOs: utxos.length,

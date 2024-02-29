@@ -1,9 +1,8 @@
-import { JsonRpcDatasource } from '@sadoprotocol/ordit-sdk'
 import { Ordit } from '@sadoprotocol/ordit-sdk'
-import { BitSeed, GeneratorLoader } from '../../../src'
+import { BitSeed, GeneratorLoader, UniSatDataSource } from '../../../src'
 
 const network = 'testnet'
-const datasource = new JsonRpcDatasource({ network })
+const datasource = new UniSatDataSource({ network })
 const generatorLoader = new GeneratorLoader(datasource)
 
 export function createTestBitSeed(): BitSeed {

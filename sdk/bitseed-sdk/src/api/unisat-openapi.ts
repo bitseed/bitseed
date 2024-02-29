@@ -1,7 +1,16 @@
 import * as bitcoin from 'bitcoinjs-lib';
 import randomstring from 'randomstring';
 
-import { CHANNEL, OPENAPI_URL_MAINNET, OPENAPI_URL_TESTNET, OPENAPI_URL_REGTEST, VERSION } from './unisat-openapi.constants';
+import { 
+  CHANNEL, 
+  OPENAPI_URL_MAINNET, 
+  OPENAPI_URL_TESTNET, 
+  OPENAPI_URL_REGTEST, 
+  WALLETAPI_URL_MAINNET, 
+  WALLETAPI_URL_TESTNET, 
+  WALLETAPI_URL_REGTEST,
+  VERSION 
+} from './unisat-openapi.constants';
 import {
   AddressSummary,
   AddressTokenSummary,
@@ -23,8 +32,10 @@ import {
 } from './unisat-openapi.types';
 
 import { IUniSatOpenAPI } from './unisat-openapi.interface'
+import { Network } from '../types'
 
 interface OpenApiStore {
+  walletAPIHost: string;
   host: string;
   deviceId: string;
   config?: WalletConfig;
@@ -35,32 +46,45 @@ enum API_STATUS {
   SUCCESS = 0
 }
 
+interface APIOptions {
+  host?: string,
+  version?: string
+}
+
 export class UnisatOpenApi implements IUniSatOpenAPI {
   store!: OpenApiStore;
   network: bitcoin.Network
   clientAddress = '';
   addressFlag = 0;
 
-  constructor(network: bitcoin.Network) {
-    this.network = network
-
+  constructor(networkType: Network) {
     this.store = {
       host: OPENAPI_URL_MAINNET,
+      walletAPIHost: WALLETAPI_URL_MAINNET,
       deviceId: randomstring.generate(12)
     };
 
-    const networkType = this.network;
-    if (networkType === bitcoin.networks.regtest) {
+    if (networkType === 'regtest') {
+      this.network = bitcoin.networks.regtest
       this.store.host = OPENAPI_URL_REGTEST;
-    } else if (networkType === bitcoin.networks.testnet){
+      this.store.walletAPIHost = WALLETAPI_URL_REGTEST;
+    } else if (networkType === 'testnet'){
+      this.network = bitcoin.networks.testnet
       this.store.host = OPENAPI_URL_TESTNET;
+      this.store.walletAPIHost = WALLETAPI_URL_TESTNET;
     } else {
+      this.network = bitcoin.networks.bitcoin
       this.store.host = OPENAPI_URL_MAINNET;
+      this.store.walletAPIHost = WALLETAPI_URL_MAINNET;
     }
   }
 
   getHost() {
     return this.store.host;
+  }
+
+  getWalletAPIHost() {
+    return this.store.walletAPIHost;
   }
 
   getNetwork(): bitcoin.Network {
@@ -89,8 +113,18 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
     return jsonRes.data;
   };
 
-  httpGet = async (route: string, params: any) => {
-    let url = this.getHost() + route;
+  httpGet = async (route: string, params: any, opts?: APIOptions) => {
+    let host = this.getWalletAPIHost()
+    if (opts && opts.host) {
+      host = opts.host
+    }
+    
+    let version = "v5"
+    if (opts && opts.version) {
+      version = opts.version
+    }
+
+    let url = host + '/' + version + route;
     let c = 0;
     for (const id in params) {
       if (c == 0) {
@@ -118,8 +152,18 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
     return this.getRespData(res);
   };
 
-  httpPost = async (route: string, params: any) => {
-    const url = this.getHost() + route;
+  httpPost = async (route: string, params: any, opts?: APIOptions) => {
+    let host = this.getWalletAPIHost()
+    if (opts && opts.host) {
+      host = opts.host
+    }
+
+    let version = "v5"
+    if (opts && opts.version) {
+      version = opts.version
+    }
+
+    let url = host + '/' + version + route;
     const headers = new Headers();
     headers.append('X-Client', 'UniSat Wallet');
     headers.append('X-Version', VERSION);
@@ -244,8 +288,9 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
   }
 
   async getTx(txid: string): Promise<Transaction> {
-    return this.httpGet('/tx/info', {
-      txid
+    return this.httpGet(`/indexer/tx/${txid}`, {}, {
+      host: this.getHost(),
+      version: "v1"
     });
   }
 

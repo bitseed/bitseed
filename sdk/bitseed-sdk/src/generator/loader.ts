@@ -1,4 +1,4 @@
-import { JsonRpcDatasource } from '@sadoprotocol/ordit-sdk'
+import { IDatasource } from '@sadoprotocol/ordit-sdk'
 
 import { InscriptionID } from '../types'
 import { inscriptionIDToString, fromB64 } from '../utils'
@@ -6,9 +6,9 @@ import { IGenerator, IGeneratorLoader } from './interface'
 import { WasmGenerator } from './wasm_generator'
 
 export class GeneratorLoader implements IGeneratorLoader {
-  private datasource: JsonRpcDatasource
+  private datasource: IDatasource
 
-  constructor(datasource: JsonRpcDatasource) {
+  constructor(datasource: IDatasource) {
     this.datasource = datasource
   }
 

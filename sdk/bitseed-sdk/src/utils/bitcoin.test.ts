@@ -1,5 +1,5 @@
 import * as bitcoin from 'bitcoinjs-lib';
-import { decodeScriptPubKey } from './bitcoin';
+import { decodeScriptPubKey, ScriptTypeWitnessV0KeyHash } from './bitcoin';
 
 describe('decodeScriptPubKey', () => {
   const network = bitcoin.networks.testnet;
@@ -10,7 +10,7 @@ describe('decodeScriptPubKey', () => {
 
     expect(result.asm).toContain('OP_0 8fcd888b6817682f90cdbbd7f795316c61f6da65');
     expect(result.address).toBe('tb1q3lxc3zmgza5zlyxdh0tl09f3d3sldkn9ftwu3c')
-    expect(result.type).toBe('P2WPKH');
+    expect(result.type).toBe(ScriptTypeWitnessV0KeyHash);
   });
 
   it('should decode a valid P2TR scriptPubKey', () => {

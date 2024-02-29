@@ -1,5 +1,11 @@
 import * as bitcoin from 'bitcoinjs-lib';
 
+export const ScriptTypeWitnessV1Taproot = "witness_v1_taproot"
+export const ScriptTypeWitnessV0Scripthash = "witness_v0_scripthash"
+export const ScriptTypeWitnessV0KeyHash = "witness_v0_keyhash"
+export const ScriptTypeScriptHash = "scripthash"
+export const ScriptTypePubkeyHash = "pubkeyhash"
+
 export interface ScriptPubKey {
     asm: string;
     desc: string;
@@ -18,11 +24,11 @@ const classifyOutputScript = (script: Buffer): string => {
   }
 
   if (isOutput(bitcoin.payments.p2pk)) return 'P2PK';
-  else if (isOutput(bitcoin.payments.p2pkh)) return 'P2PKH';
+  else if (isOutput(bitcoin.payments.p2pkh)) return ScriptTypePubkeyHash;
   else if (isOutput(bitcoin.payments.p2ms)) return 'P2MS';  
-  else if (isOutput(bitcoin.payments.p2wpkh)) return 'P2WPKH';
-  else if (isOutput(bitcoin.payments.p2sh)) return 'P2SH';
-  else if (isOutput(bitcoin.payments.p2tr)) return 'P2TR';
+  else if (isOutput(bitcoin.payments.p2wpkh)) return ScriptTypeWitnessV0KeyHash;
+  else if (isOutput(bitcoin.payments.p2sh)) return ScriptTypeScriptHash;
+  else if (isOutput(bitcoin.payments.p2tr)) return ScriptTypeWitnessV1Taproot;
   
   return 'nonstandard';
 }
@@ -39,7 +45,7 @@ export function decodeScriptPubKey(scriptPubKeyHex: string, network: bitcoin.Net
   let address: string = ""
 
   try {
-    if (['P2PKH', 'P2PK', 'P2MS', 'P2WPKH', 'P2SH', 'P2TR'].includes(type)) {
+    if ([ScriptTypePubkeyHash, 'P2PK', 'P2MS', ScriptTypeWitnessV0KeyHash, ScriptTypeScriptHash, ScriptTypeWitnessV1Taproot].includes(type)) {
       address = bitcoin.address.fromOutputScript(scriptPubKeyBuffer, network);
     }
   } catch (error) {

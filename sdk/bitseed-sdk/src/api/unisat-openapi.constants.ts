@@ -208,9 +208,13 @@ export const INTERNAL_REQUEST_SESSION = {
   icon: './images/logo/logo@128x.png'
 };
 
-export const OPENAPI_URL_MAINNET = 'https://wallet-api.unisat.io/v5';
-export const OPENAPI_URL_TESTNET = 'https://wallet-api-testnet.unisat.io/v5';
-export const OPENAPI_URL_REGTEST = 'https://wallet-api-regtest.unisat.io/v5';
+export const WALLETAPI_URL_MAINNET = 'https://wallet-api.unisat.io';
+export const WALLETAPI_URL_TESTNET = 'https://wallet-api-testnet.unisat.io';
+export const WALLETAPI_URL_REGTEST = 'https://wallet-api-regtest.unisat.io';
+
+export const OPENAPI_URL_MAINNET = 'https://open-api.unisat.io';
+export const OPENAPI_URL_TESTNET = 'https://open-api-testnet.unisat.io';
+export const OPENAPI_URL_REGTEST = 'https://open-api-regtest.unisat.io';
 
 export const EVENTS = {
   broadcastToUI: 'broadcastToUI',

@@ -76,12 +76,13 @@ export class BitSeed implements APIInterface {
       ready = false
     }
 
-    if (ready || await inscriber.isReady({ skipStrictSatsCheck: true })) {
+    if (ready) {
       await inscriber.build()
 
       const signedTxHex = this.primaryWallet.signPsbt(inscriber.toHex(), { isRevealTx: true })
 
       const inscribeTx = await this.datasource.relay({ hex: signedTxHex })
+      console.log("inscribeTx:", inscribeTx)
 
       return {
         txid: inscribeTx,

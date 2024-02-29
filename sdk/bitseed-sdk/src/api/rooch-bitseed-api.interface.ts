@@ -1,5 +1,5 @@
-import { BitSeedAsset } from '../types'
+import { SFTRecord } from '../types'
 
 export interface RoochBitSeedApiInterface {
-  getBitSeedAssetByID(): Promise<BitSeedAsset>
+  getBitSeedSFTByID(): Promise<SFTRecord>
 }
