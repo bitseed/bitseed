@@ -25,7 +25,7 @@ export class BitSeed implements APIInterface {
     this.generatorLoader = generatorLoader
   }
 
-  protected async inscribe(sft: SFTRecord, opts?: InscribeOptions): Promise<InscriptionID> {
+  public async inscribe(sft: SFTRecord, opts?: InscribeOptions): Promise<InscriptionID> {
     if (!this.primaryWallet.selectedAddress) {
       throw new Error('not selected address')
     }
@@ -46,6 +46,7 @@ export class BitSeed implements APIInterface {
     }
 
     const inscriber = new Inscriber({
+      datasource: this.datasource,
       network: this.primaryWallet.network,
       address: this.primaryWallet.selectedAddress,
       publicKey: this.primaryWallet.publicKey,
@@ -185,11 +186,11 @@ export class BitSeed implements APIInterface {
     return tick
   }
 
-  public async merge(a: InscriptionID, b: InscriptionID): Promise<InscriptionID> {
+  public async merge(_a: InscriptionID, _b: InscriptionID): Promise<InscriptionID> {
     throw new Error('Method not implemented.')
   }
 
-  public async split(a: InscriptionID): Promise<[InscriptionID, InscriptionID]> {
+  public async split(_a: InscriptionID): Promise<[InscriptionID, InscriptionID]> {
     throw new Error('Method not implemented.')
   }
 }

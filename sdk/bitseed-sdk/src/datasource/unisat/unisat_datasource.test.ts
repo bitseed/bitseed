@@ -106,6 +106,7 @@ describe('UniSatDataSource', () => {
     
     it('should return the UTXSs for getSpendables', async () => {
       const utxos = await instance.getSpendables({ address: 'tb1pk6w56zalwe0txflwedv6d4mzszu4334ehtqe2yyjv8m2g36xlgrs7m68qv', value: 100 });
+      console.log('spendable utxos:', utxos)
       expect(utxos).toBeDefined()
     });
   });
