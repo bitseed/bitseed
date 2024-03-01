@@ -1,4 +1,3 @@
-use self::mock::random_amount_generator;
 use crate::{sft::Content, wallet::Wallet, GENERATOR_TICK};
 use anyhow::{anyhow, bail, ensure, Result};
 use bitcoin::{hashes::Hash, Address, BlockHash};
@@ -6,9 +5,11 @@ use ord::InscriptionId;
 use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use crate::generator::wasm::wasm_generator::WASMGenerator;
 
 pub(crate) mod hash;
 pub(crate) mod mock;
+pub mod wasm;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct InscribeGenerateOutput {
@@ -188,8 +189,8 @@ impl GeneratorLoader {
             "Invalid generator content type: {:?}",
             content.content_type
         );
-        let _wasm = &content.body;
+        let wasm_bytecode = &content.body;
         //TODO load generator from Inscription
-        Ok(Box::new(random_amount_generator::RandomAmountGenerator))
+        Ok(Box::new(WASMGenerator::new(wasm_bytecode.clone())))
     }
 }

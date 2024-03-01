@@ -6,33 +6,6 @@ using json = nlohmann::json;
 extern "C"{
 #endif
 
-EMSCRIPTEN_KEEPALIVE char * test_alloc() {
-    char * block_hash_buffer = (char *)malloc(123);
-    return block_hash_buffer;
-}
-
-struct BlockInfo {
-    uint32_t BlockNumber;
-    char *BlockHash;
-    char *TransactionHash;
-};
-
-EMSCRIPTEN_KEEPALIVE BlockInfo * GlobalBlockInfo;
-
-EMSCRIPTEN_KEEPALIVE void initial(uint32_t block_number, char* block_hash, char *transaction_hash) {
-    BlockInfo * block_info = (BlockInfo *)malloc(sizeof(BlockInfo));
-    block_info->BlockNumber = block_number;
-    GlobalBlockInfo = block_info;
-
-    char * block_hash_buffer = (char *)malloc(sizeof(char) * strlen(block_hash));
-    memcpy(block_hash_buffer, block_hash, sizeof(char) * strlen(block_hash));
-    block_info->BlockHash = block_hash_buffer;
-
-    char * tx_hash_buffer = (char *)malloc(sizeof(char) * strlen(transaction_hash));
-    memcpy(tx_hash_buffer, transaction_hash, sizeof(char) * strlen(transaction_hash));
-    block_info->TransactionHash = tx_hash_buffer;
-}
-
 uint32_t hash_str_uint32(const std::string& str) {
 
     uint32_t hash = 0x811c9dc5;
@@ -47,18 +20,50 @@ uint32_t hash_str_uint32(const std::string& str) {
     return hash;
 }
 
-EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(char* user_input, const char* attrs) {
-    uint32_t hash_value = hash_str_uint32(std::string(GlobalBlockInfo->BlockHash) +
-            std::string(GlobalBlockInfo->TransactionHash) + std::string(user_input));
+uint32_t get_data_length(const char *buf) {
+    char data_len_buf[4];
+    data_len_buf[3] = buf[0];
+    data_len_buf[2] = buf[1];
+    data_len_buf[1] = buf[2];
+    data_len_buf[0] = buf[3];
+    uint32_t data_len;
+    memcpy(&data_len, data_len_buf, 4);
+    return data_len;
+}
 
-    std::vector<char> vec;
-    vec.insert(vec.end(), attrs, attrs+strlen(attrs));
-    json json_object = json::from_cbor(vec.begin(), vec.end());
+char * int_to_bytes(uint32_t n) {
+    char* bytes = (char *)malloc(4);
+
+    bytes[0] = (n >> 24) & 0xFF;
+    bytes[1] = (n >> 16) & 0xFF;
+    bytes[2] = (n >> 8) & 0xFF;
+    bytes[3] = n & 0xFF;
+
+    return bytes;
+}
+
+EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
+    uint32_t buffer_length = get_data_length(buffer);
+    std::vector<uint8_t> buffer_vec;
+    buffer_vec.insert(buffer_vec.end(), buffer + 4, buffer + 4 + buffer_length);
+    json json_object_top = json::from_cbor(buffer_vec.begin(), buffer_vec.end());
 
     json json_output;
 
-    if ((!json_object.empty()) && (json_object.is_array())) {
-        for (json::iterator it = json_object.begin(); it != json_object.end(); ++it) {
+    std::string seed;
+    json_object_top["seed"].get_to(seed);
+
+    std::string user_input;
+    json_object_top["user_input"].get_to(user_input);
+
+    std::vector<uint8_t> attrs_buffer;
+    json_object_top["attrs"].get_to(attrs_buffer);
+
+    json attrs_object = json::from_cbor(attrs_buffer.begin(), attrs_buffer.end());
+    uint32_t hash_value = hash_str_uint32(seed + user_input);
+
+    if ((!attrs_object.empty()) && (attrs_object.is_array())) {
+        for (json::iterator it = attrs_object.begin(); it != attrs_object.end(); ++it) {
             json attr = *it;
             if (attr.is_object()) {
                 for (json::iterator it_inner = attr.begin(); it_inner != attr.end(); ++it_inner) {
@@ -82,24 +87,35 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(char* user_input, const char
         }
     }
 
-    std::vector<std::uint8_t> dump = json::to_cbor(json_output);
+    json content(json::value_t::object);
+    json top_json_output;
+    top_json_output.emplace("amount", 1);
+    top_json_output.emplace("attributes", json_output);
+    top_json_output.emplace("content", content);
+
+    std::vector<std::uint8_t> dump = json::to_cbor(top_json_output);
+    size_t dump_len = dump.size();
+    char * length_bytes = int_to_bytes((uint32_t)dump_len);
     char * output = (char *)dump.data();
-    char * buffer = (char *)malloc(sizeof(char) * strlen(output));
-    memcpy(buffer, output, strlen(output));
-    return buffer;
+    char * buffer_output = (char *)malloc(sizeof(char) * dump_len + 4);
+    memcpy(buffer_output, length_bytes, 4);
+    memcpy(buffer_output + 4, output, dump_len);
+    return buffer_output;
 }
 
-EMSCRIPTEN_KEEPALIVE bool inscribe_verify(char* user_input, const char* attrs, const char* output) {
-    const char *inscribe_output = inscribe_generate(user_input, attrs);
-    if (strcmp(inscribe_output, output)) {
+EMSCRIPTEN_KEEPALIVE bool inscribe_verify(const char* buffer, const char* inscribe_output_buffer) {
+    const char *inscribe_output = inscribe_generate(buffer);
+    uint32_t output_len = get_data_length(inscribe_output);
+    if (memcmp(inscribe_output+4, inscribe_output_buffer, output_len)) {
         return true;
     } else {
         return false;
     }
 }
 
-EMSCRIPTEN_KEEPALIVE const char * indexer_generate(char *inscription_id, const char* attrs) {
-    return inscribe_generate(inscription_id, attrs);
+EMSCRIPTEN_KEEPALIVE const char * indexer_generate(const char* buffer) {
+    char seed[] = "";
+    return inscribe_generate(buffer);
 }
 
 #ifdef __cplusplus

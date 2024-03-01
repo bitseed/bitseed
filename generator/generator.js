@@ -1019,16 +1019,14 @@ var wasmImports = {
   proc_exit: _proc_exit
 };
 var wasmExports = createWasm();
-var _test_alloc = Module['_test_alloc'] = () => (_test_alloc = Module['_test_alloc'] = wasmExports['test_alloc'])();
-var _initial = Module['_initial'] = (a0, a1, a2) => (_initial = Module['_initial'] = wasmExports['initial'])(a0, a1, a2);
-var _inscribe_generate = Module['_inscribe_generate'] = (a0, a1) => (_inscribe_generate = Module['_inscribe_generate'] = wasmExports['inscribe_generate'])(a0, a1);
-var _inscribe_verify = Module['_inscribe_verify'] = (a0, a1, a2) => (_inscribe_verify = Module['_inscribe_verify'] = wasmExports['inscribe_verify'])(a0, a1, a2);
-var _indexer_generate = Module['_indexer_generate'] = (a0, a1) => (_indexer_generate = Module['_indexer_generate'] = wasmExports['indexer_generate'])(a0, a1);
+var _inscribe_generate = Module['_inscribe_generate'] = (a0) => (_inscribe_generate = Module['_inscribe_generate'] = wasmExports['inscribe_generate'])(a0);
+var _inscribe_verify = Module['_inscribe_verify'] = (a0, a1) => (_inscribe_verify = Module['_inscribe_verify'] = wasmExports['inscribe_verify'])(a0, a1);
+var _indexer_generate = Module['_indexer_generate'] = (a0) => (_indexer_generate = Module['_indexer_generate'] = wasmExports['indexer_generate'])(a0);
 var __initialize = Module['__initialize'] = () => (__initialize = Module['__initialize'] = wasmExports['_initialize'])();
 var stackSave = () => (stackSave = wasmExports['stackSave'])();
 var stackRestore = (a0) => (stackRestore = wasmExports['stackRestore'])(a0);
 var stackAlloc = (a0) => (stackAlloc = wasmExports['stackAlloc'])(a0);
-var _GlobalBlockInfo = Module['_GlobalBlockInfo'] = 4848;
+
 
 // include: postamble.js
 // === Auto-generated postamble setup entry stuff ===
