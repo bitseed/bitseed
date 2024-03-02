@@ -1,9 +1,12 @@
+import * as bitcoin from 'bitcoinjs-lib'
 import { BitSeed } from './bitseed';
-import { Ordit, IDatasource, UTXOLimited, GetSpendablesOptions} from '@sadoprotocol/ordit-sdk';
+import { Ordit, IDatasource, UTXOLimited, GetSpendablesOptions, RelayOptions} from '@sadoprotocol/ordit-sdk';
 import { IGeneratorLoader } from './generator';
 import { SFTRecord, InscriptionID } from './types';
- 
-const network = 'testnet'
+import { decodeScriptPubKey } from './utils'
+
+const networkType = 'testnet'
+const network = bitcoin.networks.testnet;
 
 describe('BitSeed', () => {
   let primaryWallet: Ordit;
@@ -16,14 +19,14 @@ describe('BitSeed', () => {
     // address: tb1pz9qq9gwemapvmpntw90ygalhnjzgy2d7tglts0a90avrre902z2sh3ew0h
     primaryWallet = new Ordit({
       wif: 'cNGdjKojxE7nCcYdK34d12cdYTzBdDV4VdXdbpG7SHGTRWuCxpAW',
-      network,
+      network: networkType,
       type: 'taproot',
     })
 
     // address: tb1pk6w56zalwe0txflwedv6d4mzszu4334ehtqe2yyjv8m2g36xlgrs7m68qv
     fundingWallet = new Ordit({
       wif: 'cNfgnR9UB1garDrQ3WVaQ2LbG4CPxpuEepor44yyuiB8wtSa3Bta',
-      network,
+      network: networkType,
       type: 'taproot',
     })
 
@@ -66,27 +69,51 @@ describe('BitSeed', () => {
 
 
     it('should deposit reveal fee and inscribe successfully', async () => {
-      const utxos = new Array<UTXOLimited>();
-      utxos.push({
-        n: 1,
-        txid: 'f2e6e08f7ddd3ce0dfaaf5e7d8a7709948539582347f8d55a5a53c3961519087',
-        sats: 52153,
-        scriptPubKey: {
-          asm: 'OP_1 b69d4d0bbf765eb327eecb59a6d76280b958c6b9bac195109261f6a44746fa07',
-          desc: 'Script witness_v1_taproot',
-          hex: '5120b69d4d0bbf765eb327eecb59a6d76280b958c6b9bac195109261f6a44746fa07',
-          address: 'tb1pk6w56zalwe0txflwedv6d4mzszu4334ehtqe2yyjv8m2g36xlgrs7m68qv',
-          type: 'witness_v1_taproot'
-        }
-      })
+      const mempool = new Map<string, UTXOLimited[]>()
 
-      datasourceMock.getSpendables.mockImplementation(function (_opts: GetSpendablesOptions): Promise<UTXOLimited[]> {
+      const getOrCreateUTXOS =(mempool: Map<string, UTXOLimited[]>, address: string)=>{
+        let utxos = mempool.get(address)
+        if (!utxos) {
+          utxos = new Array<UTXOLimited>()
+          mempool.set(address, utxos)
+        }
+
+        return utxos
+      }
+
+      datasourceMock.getSpendables.mockImplementation(function (opts: GetSpendablesOptions): Promise<UTXOLimited[]> {
+        let utxos = (mempool.get(opts.address) || new Array<UTXOLimited>()).
+          filter((utxo)=>utxo.sats >= opts.value)
+        
         return new Promise<UTXOLimited[]>(function(resolve){
           resolve(utxos)
         })
       })
 
-      datasourceMock.relay.mockResolvedValueOnce('depositTxId').mockResolvedValueOnce('inscribeTxId');
+      datasourceMock.relay.mockImplementation(function ({ hex }: RelayOptions): Promise<string> {
+        console.log('singedHex:', hex)
+
+        const tx = bitcoin.Transaction.fromHex(hex)
+        const txid = tx.getId()
+
+        Array.from(tx.outs).map((output, index)=>{
+          const address = bitcoin.address.fromOutputScript(output.script, network)
+          const scriptPubKey = decodeScriptPubKey(output.script.toString('hex'), network)
+          const utxo = {
+            n: index,
+            txid: txid,
+            sats: output.value,
+            scriptPubKey: scriptPubKey
+          }
+
+          const utxos = getOrCreateUTXOS(mempool, address)
+          utxos.push(utxo)
+        })
+
+        return new Promise<string>(function(resolve){
+          resolve(txid)
+        })
+      })
 
       function stringBody(str: string) {
         const encoder = new TextEncoder();
@@ -106,9 +133,9 @@ describe('BitSeed', () => {
 
       const inscriptionID: InscriptionID = await bitSeed.inscribe(sftRecord);
 
-      expect(inscriptionID).toEqual({ txid: 'inscribeTxId', index: 0 });
+      expect(inscriptionID).toHaveProperty('txid');
+      expect(inscriptionID.index).toEqual(0);
       expect(datasourceMock.relay).toHaveBeenCalledTimes(2);
     });
   });
 });
-

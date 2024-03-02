@@ -1,13 +1,15 @@
+import * as bitcoin from 'bitcoinjs-lib'
 import { IDatasource } from '@sadoprotocol/ordit-sdk'
-import { Inscriber, Ordit, ordit } from '@sadoprotocol/ordit-sdk'
+import { Inscriber, Ordit, ordit, UTXOLimited } from '@sadoprotocol/ordit-sdk'
 
 import { BITSEED_PROTOAL_NAME } from './constants'
 import { InscriptionID, Generator, Tick, SFTRecord } from './types'
-import { inscriptionIDToString, toB64 } from './utils'
+import { inscriptionIDToString, toB64, decodeUTXOs } from './utils'
 import { IGeneratorLoader } from './generator'
 import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
 
 export class BitSeed implements APIInterface {
+  private network: bitcoin.Network
   private primaryWallet: Ordit
   private fundingWallet: Ordit
   private datasource: IDatasource
@@ -23,6 +25,17 @@ export class BitSeed implements APIInterface {
     this.fundingWallet = fundingWallet
     this.datasource = datasource
     this.generatorLoader = generatorLoader
+    this.network = this.resolveNetwork(this.primaryWallet.network)
+  }
+
+  resolveNetwork(networkType: string): bitcoin.Network {
+    if (networkType === 'regtest') {
+      return bitcoin.networks.regtest
+    } else if (networkType === 'testnet'){
+      return bitcoin.networks.testnet
+    } else {
+      return bitcoin.networks.bitcoin
+    }
   }
 
   public async inscribe(sft: SFTRecord, opts?: InscribeOptions): Promise<InscriptionID> {
@@ -65,12 +78,18 @@ export class BitSeed implements APIInterface {
     console.log("revealed:", revealed)
 
     // deposit revealFee to address
-    await this.depositRevealFee(revealed, opts)
+    const utxos = await this.depositRevealFee(revealed, opts)
 
     let ready = false;
 
     try {
-      await inscriber.fetchAndSelectSuitableUnspent({ skipStrictSatsCheck: true })
+      const config = (builder: any)=>{
+        builder.utxos = utxos
+        builder.suitableUnspent = utxos[0]
+        builder.ready = true
+      };
+      
+      config(inscriber)
       ready = true
     } catch (error) {
       console.log("inscribe error:", error)
@@ -100,7 +119,7 @@ export class BitSeed implements APIInterface {
       revealFee: number
     },
     opts?: InscribeOptions,
-  ) {
+  ): Promise<UTXOLimited[]> {
     if (!this.fundingWallet.selectedAddress) {
       throw new Error('not selected address')
     }
@@ -122,6 +141,8 @@ export class BitSeed implements APIInterface {
     const txId = await this.datasource.relay({ hex: signedTxHex })
 
     console.log('depositRevealFee txId:', txId)
+
+    return decodeUTXOs(signedTxHex, this.network, revealed.address)
   }
 
   public async generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID> {

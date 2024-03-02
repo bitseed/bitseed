@@ -1,5 +1,5 @@
 import * as bitcoin from 'bitcoinjs-lib';
-
+import { UTXOLimited } from '@sadoprotocol/ordit-sdk';
 export const ScriptTypeWitnessV1Taproot = "witness_v1_taproot"
 export const ScriptTypeWitnessV0Scripthash = "witness_v0_scripthash"
 export const ScriptTypeWitnessV0KeyHash = "witness_v0_keyhash"
@@ -60,4 +60,28 @@ export function decodeScriptPubKey(scriptPubKeyHex: string, network: bitcoin.Net
       address,
       type
   };
+}
+
+export function decodeUTXOs(signedTxHex: string, network: bitcoin.Network, filterAddress?: string): UTXOLimited[] {
+  const tx = bitcoin.Transaction.fromHex(signedTxHex)
+  const txid = tx.getId()
+
+  return Array.from(tx.outs).filter((output)=>{
+    if (!filterAddress) return true
+    
+    try {
+      const address = bitcoin.address.fromOutputScript(output.script, network)
+      return address && address == filterAddress
+    } catch(e: any) {
+      return false
+    } 
+  }).map((output, index)=>{
+    const scriptPubKey = decodeScriptPubKey(output.script.toString('hex'), network)
+    return {
+      n: index,
+      txid: txid,
+      sats: output.value,
+      scriptPubKey: scriptPubKey
+    }
+  })
 }
