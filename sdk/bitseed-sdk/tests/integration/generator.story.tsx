@@ -22,6 +22,7 @@ export default function DeployGeneratorStory() {
 
     try {
       let wasmBytes = await readFileAsBytes(file)
+      console.log('wasm length:', wasmBytes.length)
 
       const deployOptions: DeployOptions = {
         fee_rate: 1,

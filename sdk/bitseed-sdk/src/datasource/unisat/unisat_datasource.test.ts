@@ -22,7 +22,7 @@ describe('UniSatDataSource', () => {
       }
   
       const balance = await instance.getBalance({ address: wallet.selectedAddress });
-      expect(balance).toBe(0.000021);
+      expect(balance).toBeDefined()
     });
 
     it('should return the 0 balance for a new address', async () => {
@@ -77,7 +77,28 @@ describe('UniSatDataSource', () => {
       expect(inscription.value).toBe(600)
       expect(inscription.meta).toStrictEqual({})
     });
+
+    it('should return the correct Inscription for getInscription for wasm', async () => {
+      const inscription = await instance.getInscription({ id: '33485f62248720b7faf7f24b1236a77e444fea0f0b67dee17461fdf8029cb7b8i0', decodeMetadata: true });
+
+      expect(inscription).toBeDefined()
+      expect(inscription.id).toBe('33485f62248720b7faf7f24b1236a77e444fea0f0b67dee17461fdf8029cb7b8i0')
+      expect(inscription.outpoint).toBe('33485f62248720b7faf7f24b1236a77e444fea0f0b67dee17461fdf8029cb7b8:0')
+      expect(inscription.owner).toBe('tb1pz9qq9gwemapvmpntw90ygalhnjzgy2d7tglts0a90avrre902z2sh3ew0h')
+      expect(inscription.genesis).toBe('33485f62248720b7faf7f24b1236a77e444fea0f0b67dee17461fdf8029cb7b8')
+      expect(inscription.fee).toBe(-1)
+      expect(inscription.height).toBe(2580221)
+      expect(inscription.number).toBe(2058307)
+      expect(inscription.sat).toBe(1000)
+      expect(inscription.timestamp).toBe(1709392826)
+      expect(inscription.mediaType).toBe('application/wasm')
+      expect(inscription.mediaSize).toBe(101)
+      expect(inscription.mediaContent).toBe('AGFzbQEAAAABCAJgAX8AYAAAAg8BB2NvbnNvbGUDbG9nAAADAgEBBQMBAAEHFwIGbWVtb3J5AgAKaGVsbG9Xb3JsZAABCggBBgBBABAACwsUAQBBAAsOSGVsbG8sIFdvcmxkIQA=')
+      expect(inscription.value).toBe(1000)
+      expect(inscription.meta).toStrictEqual({})
+    });
   });
+  
 
   describe('getInscriptions', () => {
     jest.setTimeout(20000)

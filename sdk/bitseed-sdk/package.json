@@ -12,7 +12,7 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:unit:debug": "jest src/utils",
+    "test:unit:debug": "jest src/datasource/unisat/unisat_datasource_debug.test.ts",
     "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
@@ -55,7 +55,7 @@
     "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
-    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-v2.4.6.tgz",
+    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-v2.4.7.tgz",
     "@types/randomstring": "^1.1.11",
     "@yubing744/rooch-sdk": "^0.1.0",
     "bip39": "^3.1.0",

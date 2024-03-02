@@ -69,7 +69,7 @@ export class BitSeed implements APIInterface {
       mediaType: contentType,
       feeRate: opts?.fee_rate || 1,
       meta: meta,
-      postage: opts?.postage || 1000, // base value of the inscription in sats
+      postage: opts?.postage || 600, // base value of the inscription in sats
     })
 
     inscriber.withMetaProtocol(BITSEED_PROTOAL_NAME)
@@ -171,7 +171,7 @@ export class BitSeed implements APIInterface {
       amount: max,
       attributes: {
         repeat: opts?.repeat || 0,
-        generator: `/inscription/${generator}`,
+        generator: `/inscription/${inscriptionIDToString(generator)}`,
         has_user_input: opts?.has_user_input || false,
         deploy_args: opts?.deploy_args
       }

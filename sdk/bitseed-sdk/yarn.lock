@@ -1898,9 +1898,9 @@
   resolved "https://registry.npmjs.org/@rushstack/eslint-patch/-/eslint-patch-1.7.2.tgz#2d4260033e199b3032a08b41348ac10de21c47e9"
   integrity sha512-RbhOOTCNoCrbfkRyoXODZp75MlpiHMgbE5MEBZAnnnLyQNgrigEj4p0lzsMDyc1zVsJDLrivB58tgg3emX0eEA==
 
-"@sadoprotocol/ordit-sdk@./libs/sadoprotocol-ordit-sdk-v2.4.6.tgz":
-  version "2.4.6"
-  resolved "./libs/sadoprotocol-ordit-sdk-v2.4.6.tgz#b58e12418547213baeeefd64881a4a253436e7f2"
+"@sadoprotocol/ordit-sdk@./libs/sadoprotocol-ordit-sdk-v2.4.7.tgz":
+  version "2.4.7"
+  resolved "./libs/sadoprotocol-ordit-sdk-v2.4.7.tgz#32df1b065560de75e4f674dcbf76a890b5cc9234"
   dependencies:
     "@bitcoinerlab/secp256k1" "^1.0.5"
     bip32 "^4.0.0"

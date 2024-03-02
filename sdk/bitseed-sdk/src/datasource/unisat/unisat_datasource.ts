@@ -41,7 +41,7 @@ export class UniSatDataSource implements IDatasource {
     const utxoDetail = await this.unisatOpenAPI.getInscriptionUtxoDetail(id);
 
     if (!utxoDetail || utxoDetail.inscriptions.length == 0) {
-      throw new Error('inscription nil')
+      throw new BitseedSDKError('inscription nil')
     }
 
     const inscription = utxoDetail.inscriptions[0]
