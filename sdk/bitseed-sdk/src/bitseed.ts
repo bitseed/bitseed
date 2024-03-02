@@ -83,13 +83,13 @@ export class BitSeed implements APIInterface {
     let ready = false;
 
     try {
-      const config = (builder: any)=>{
+      const setUTXOs = (builder: any, utxos: UTXOLimited[])=>{
         builder.utxos = utxos
         builder.suitableUnspent = utxos[0]
         builder.ready = true
       };
       
-      config(inscriber)
+      setUTXOs(inscriber, utxos)
       ready = true
     } catch (error) {
       console.log("inscribe error:", error)
