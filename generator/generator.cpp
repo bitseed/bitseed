@@ -1,5 +1,7 @@
-#include <nlohmann/json.hpp>
 #include <emscripten.h>
+#include "console/log.hpp"
+#include "nlohmann/json.hpp"
+
 using json = nlohmann::json;
 
 #ifdef __cplusplus
@@ -43,6 +45,8 @@ char * int_to_bytes(uint32_t n) {
 }
 
 EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
+    log("inscribe_generate_start");
+
     uint32_t buffer_length = get_data_length(buffer);
     std::vector<uint8_t> buffer_vec;
     buffer_vec.insert(buffer_vec.end(), buffer + 4, buffer + 4 + buffer_length);

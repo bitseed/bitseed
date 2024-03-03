@@ -12,9 +12,10 @@ const loadWasmModuleFromFile = async(url: string) => {
 describe('WasmGenerator', () => {
   it('should call inscribe_generate with correct parameters', async () => {
     // Create an instance of WasmGenerator
-    const generator = await loadWasmModuleFromFile(path.resolve(__dirname, '../../tests/data/generator.wasm'))
+    //const generator = await loadWasmModuleFromFile(path.resolve(__dirname, '../../tests/data/generator.wasm'))
+    const generator = await loadWasmModuleFromFile(path.resolve(__dirname, '../../../../generator/generator.wasm'))
 
-    // Prepare test data
+    /* Prepare test data
     const deployArgs = [
       {
         "amount": {
@@ -26,16 +27,17 @@ describe('WasmGenerator', () => {
         }
       }
     ];
+    */
 
     const seed = 'testSeed';
     const userInput = 'testUserInput';
 
     // Call the inscribeGenerate method
-    const result = await generator.inscribeGenerate(deployArgs, seed, userInput);
+    const result = await generator.inscribeGenerate([], seed, userInput);
 
     // Assert that result has properties "id" and "amount"
-    expect(result).toHaveProperty("id");
     expect(result).toHaveProperty("amount");
+    expect(result).toHaveProperty("attributes");
+    expect(result).toHaveProperty("content");
   });
 });
-

@@ -1,6 +1,7 @@
+import cbor from 'cbor'
 import { IGenerator } from './interface'
 import { SFTRecord, DeployArg } from '../types'
-
+import { EmscriptenRuntime } from './emscripten_runtime'
 export class WasmGenerator implements IGenerator {
   private wasmInstance: WebAssembly.Instance
 
@@ -13,17 +14,23 @@ export class WasmGenerator implements IGenerator {
     seed: string,
     userInput: string,
   ): Promise<SFTRecord> {
-    // Convert deployArgs to a JSON string
-    const attrs = JSON.stringify(deployArgs)
+    // Convert deployArgs to a CBOR bytes
+    const argsBytes = new Uint8Array(cbor.encodeOne(deployArgs))
+
+    const input = {
+      "seed": seed,
+      "user_input": userInput,
+      "attrs": argsBytes,
+    }
 
     // Get the memory of the WASM instance
     const memory = this.wasmInstance.exports.memory as WebAssembly.Memory
 
     // Allocate memory and write string data
-    const encodeStringOnStack = (str: string, memory: WebAssembly.Memory) => {
-      const encoder = new TextEncoder()
-      const encodedString = encoder.encode(str + '\0') // Include null-terminator
-      const len = encodedString.length
+    const encodeInputOnStack = (input: object, memory: WebAssembly.Memory) => {
+      const encodedBuffer = cbor.encodeOne(input)
+      const len = encodedBuffer.length
+
       const stackAllocFunction = this.wasmInstance.exports.stackAlloc as CallableFunction
       const stackSaveFunction = this.wasmInstance.exports.stackSave as CallableFunction
       const stackRestoreFunction = this.wasmInstance.exports.stackRestore as CallableFunction
@@ -32,78 +39,61 @@ export class WasmGenerator implements IGenerator {
       const stackPointer = stackSaveFunction()
 
       // Allocate space on the stack
-      const ptr = stackAllocFunction(len)
+      const ptr = stackAllocFunction(len + 4 + 1)
 
-      // Write the string to the stack
-      const bytes = new Uint8Array(memory.buffer, ptr, len)
-      bytes.set(encodedString)
+      // write buffer length
+      const dataView = new DataView(memory.buffer, ptr, len + 4 + 1);
+      dataView.setUint32(0, len, true)
+
+      // Write the input to the stack
+      const bytes = new Uint8Array(memory.buffer, ptr, len + 4 + 1)
+      bytes.set(encodedBuffer, 4)
+      bytes.set([0], len + 4)
 
       // Return a function that will restore the stack after use
       return {
         ptr,
-        len,
+        len: len + 5,
         free: () => stackRestoreFunction(stackPointer),
       }
     }
 
-    // Encode seed and userInput and write them into WASM memory
-    const seedEncoded = encodeStringOnStack(seed, memory)
-    const userInputEncoded = encodeStringOnStack(userInput, memory)
-    const attrsEncoded = encodeStringOnStack(attrs, memory)
-
-    // Call the WASM function
-    const inscribeGenerateFunction = this.wasmInstance.exports.inscribe_generate as CallableFunction
-    const resultPtr = inscribeGenerateFunction(
-      seedEncoded.ptr,
-      userInputEncoded.ptr,
-      attrsEncoded.ptr,
-    )
-
-    // Read the result string from WASM memory
-    const decodeString = (ptr: number, memory: WebAssembly.Memory) => {
-      const decoder = new TextDecoder()
+    // Read the output from WASM memory
+    const decodeOutputOnHeap = async (ptr: number, memory: WebAssembly.Memory) => {
       const dataView = new DataView(memory.buffer)
-      let length = 0
-      while (dataView.getUint8(ptr + length) !== 0) {
-        length++
-      }
-      const encodedResult = new Uint8Array(memory.buffer, ptr, length)
-      return decoder.decode(encodedResult, {})
+      const length = dataView.getUint32(ptr, false)
+      const encodedResult = new Uint8Array(memory.buffer, ptr + 4, length)
+
+      return await cbor.decodeFirst(encodedResult, {})
     }
 
-    const result = decodeString(resultPtr, memory)
+    // Encode seed and userInput and write them into WASM memory
+    const inputEncoded = encodeInputOnStack(input, memory)
 
-    seedEncoded.free()
-    userInputEncoded.free()
-    attrsEncoded.free()
+    try {
+      // Call the WASM function
+      const inscribeGenerateFunction = this.wasmInstance.exports.inscribe_generate as CallableFunction
+      const outputPtr = inscribeGenerateFunction(inputEncoded.ptr)
 
-    // Convert the result string into a JSON object
-    const sft: SFTRecord = JSON.parse(result)
-
-    // Return the SFT object
-    return sft
+      const output = await decodeOutputOnHeap(outputPtr, memory)
+      return output as SFTRecord
+    } catch(e: any) {
+      console.log('call inscribe_generate error:', e)
+      throw e
+    } finally {
+      inputEncoded.free()
+    }
   }
 
   public static async loadWasmModule(wasmBytes: BufferSource): Promise<WasmGenerator> {
     const module = await WebAssembly.compile(wasmBytes)
+    const runtime = new EmscriptenRuntime()
 
     const imports = {
-      env: {
-        memoryBase: 0,
-        tableBase: 0,
-        memory: new WebAssembly.Memory({ initial: 256 }),
-        table: new WebAssembly.Table({ initial: 0, element: 'anyfunc' }),
-      },
-      wasi_snapshot_preview1: {
-        fd_write: () => {},
-        fd_seek: () => {},
-        fd_close: () => {},
-        proc_exit: () => {},
-      },
+      ...runtime.getImports()
     }
-
+    
     const instance = await WebAssembly.instantiate(module, imports)
-
     return new WasmGenerator(instance)
   }
 }

@@ -12,7 +12,7 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:unit:debug": "jest src/datasource/unisat/unisat_datasource_debug.test.ts",
+    "test:unit:debug": "jest src/generator/wasm_generator.test.ts",
     "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
@@ -62,6 +62,7 @@
     "bitcoinjs-lib": "^6.1.5",
     "commander": "^10.0.0",
     "decimal.js": "^10.4.3",
-    "randomstring": "^1.2.3"
+    "randomstring": "^1.2.3",
+    "cbor": "^9.0.2"
   }
 }
