@@ -82,47 +82,20 @@ class ExitStatus {
 }
 
 export class EmscriptenRuntime {
-  private memory: WebAssembly.Memory;
-  private table: WebAssembly.Table;
-  private writefdCount: number = 0;
+  private module: WebAssembly.Module;
+  private memory: WebAssembly.Memory | undefined;
 
-  public ABORT: boolean = false;
+  private HEAPU8: Uint8Array | undefined;
+  private HEAPU32: Uint32Array | undefined;
+
   public EXITSTATUS: number = 0;
 
-  public HEAPU8: Uint8Array;
-  public HEAPU32: Uint32Array;
-
-  constructor() {
-    this.memory = new WebAssembly.Memory({ initial: 65536 });
-    this.table = new WebAssembly.Table({ initial: 0, element: 'anyfunc' });
-
-    this.HEAPU8 = new Uint8Array(this.memory.buffer)
-    this.HEAPU32 = new Uint32Array(this.memory.buffer)
+  constructor(module: WebAssembly.Module) {
+    this.module = module;
   }
 
-  getMemory(): WebAssembly.Memory {
-    return this.memory
-  }
-
-  getTable(): WebAssembly.Table {
-    return this.table
-  }
-
-  getImports() {
+  async instantiate(): Promise<WebAssembly.Instance> {
     const wasmImports = {
-      env: {
-        memoryBase: 0,
-        tableBase: 0,
-        memory: this.memory,
-        table: this.table,
-        log_string: (offset: number, length: number) => {
-          console.log('log_string offset:', offset, 'length:', length)
-          const bytes = new Uint8Array(this.memory.buffer, offset, length);
-          out(bytes)
-          const string = UTF8ArrayToString(bytes, 0, undefined);
-          out(string);
-        }
-      },
       wasi_snapshot_preview1: {
         fd_write: (fd: any, iov: any, iovcnt: any, pnum: any) => {
           this.fd_write(fd, iov, iovcnt, pnum)
@@ -139,27 +112,32 @@ export class EmscriptenRuntime {
       }
     }
 
-    return wasmImports
+    const instance = await WebAssembly.instantiate(this.module, wasmImports)
+
+    this.memory = instance.exports['memory'] as WebAssembly.Memory;
+    
+    this.HEAPU8 = new Uint8Array(this.memory.buffer)
+    this.HEAPU32 = new Uint32Array(this.memory.buffer)
+
+    return instance
   }
 
   fd_write(fd: any, iov: any, iovcnt: any, pnum: any) {
-    this.writefdCount++
-    if (this.writefdCount % 1000 == 0) {
-      console.log('writefdCount:', this.writefdCount)
-    }
-    
-    // hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0
-    var num = 0;
-    for (var i = 0; i < iovcnt; i++) {
-      var ptr = this.HEAPU32[((iov) >> 2)];
-      var len = this.HEAPU32[(((iov) + (4)) >> 2)];
-      iov += 8;
-      for (var j = 0; j < len; j++) {
-        printChar(fd, this.HEAPU8[ptr + j]);
+    if (this.HEAPU8 && this.HEAPU32) {
+      // hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0
+      var num = 0;
+      for (var i = 0; i < iovcnt; i++) {
+        var ptr = this.HEAPU32[((iov) >> 2)];
+        var len = this.HEAPU32[(((iov) + (4)) >> 2)];
+        iov += 8;
+        for (var j = 0; j < len; j++) {
+          printChar(fd, this.HEAPU8[ptr + j]);
+        }
+        num += len;
       }
-      num += len;
+      this.HEAPU32[((pnum) >> 2)] = num;
     }
-    this.HEAPU32[((pnum) >> 2)] = num;
+
     return 0;
   }
 

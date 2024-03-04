@@ -145,11 +145,14 @@ export class BitSeed implements APIInterface {
     return decodeUTXOs(signedTxHex, this.network, revealed.address)
   }
 
-  public async generator(wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID> {
+  public async generator(name: string, wasmBytes: Uint8Array, opts?: InscribeOptions): Promise<InscriptionID> {
     const sft: SFTRecord = {
       op: "mint",
       tick: "generator",
       amount: 1,
+      attributes: {
+        name: name,
+      },
       content: {
         content_type: 'application/wasm',
         body: wasmBytes
@@ -172,7 +175,6 @@ export class BitSeed implements APIInterface {
       attributes: {
         repeat: opts?.repeat || 0,
         generator: `/inscription/${inscriptionIDToString(generator)}`,
-        has_user_input: opts?.has_user_input || false,
         deploy_args: opts?.deploy_args
       }
     }
@@ -193,6 +195,9 @@ export class BitSeed implements APIInterface {
     const generator = await this.generatorLoader.load(tick.generator)
     const sft = await generator.inscribeGenerate(tick.deploy_args, opts?.satpoint, userInput)
     console.log('SFT record:', sft)
+
+    sft.op = "mint"
+    sft.tick = tick.tick;
 
     return this.inscribe(sft, opts)
   }

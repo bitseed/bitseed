@@ -1,7 +1,8 @@
 import cbor from 'cbor'
 import { IGenerator } from './interface'
-import { SFTRecord, DeployArg } from '../types'
+import { SFTRecord } from '../types'
 import { EmscriptenRuntime } from './emscripten_runtime'
+
 export class WasmGenerator implements IGenerator {
   private wasmInstance: WebAssembly.Instance
 
@@ -10,17 +11,17 @@ export class WasmGenerator implements IGenerator {
   }
 
   public async inscribeGenerate(
-    deployArgs: Array<DeployArg>,
+    deployArgs: Array<string>,
     seed: string,
     userInput: string,
   ): Promise<SFTRecord> {
     // Convert deployArgs to a CBOR bytes
-    const argsBytes = new Uint8Array(cbor.encodeOne(deployArgs))
+    const argsBytes = new Uint8Array(cbor.encodeOne(deployArgs.map((json)=>JSON.parse(json))))
 
     const input = {
       "seed": seed,
       "user_input": userInput,
-      "attrs": argsBytes,
+      "attrs": Array.from(argsBytes),
     }
 
     // Get the memory of the WASM instance
@@ -39,16 +40,15 @@ export class WasmGenerator implements IGenerator {
       const stackPointer = stackSaveFunction()
 
       // Allocate space on the stack
-      const ptr = stackAllocFunction(len + 4 + 1)
+      const ptr = stackAllocFunction(len + 4)
 
       // write buffer length
-      const dataView = new DataView(memory.buffer, ptr, len + 4 + 1);
-      dataView.setUint32(0, len, true)
+      const dataView = new DataView(memory.buffer);
+      dataView.setUint32(ptr, len, false)
 
       // Write the input to the stack
-      const bytes = new Uint8Array(memory.buffer, ptr, len + 4 + 1)
-      bytes.set(encodedBuffer, 4)
-      bytes.set([0], len + 4)
+      const bytes = new Uint8Array(memory.buffer)
+      bytes.set(encodedBuffer, ptr + 4)
 
       // Return a function that will restore the stack after use
       return {
@@ -76,7 +76,7 @@ export class WasmGenerator implements IGenerator {
       const outputPtr = inscribeGenerateFunction(inputEncoded.ptr)
 
       const output = await decodeOutputOnHeap(outputPtr, memory)
-      return output as SFTRecord
+      return output as SFTRecord;
     } catch(e: any) {
       console.log('call inscribe_generate error:', e)
       throw e
@@ -87,13 +87,8 @@ export class WasmGenerator implements IGenerator {
 
   public static async loadWasmModule(wasmBytes: BufferSource): Promise<WasmGenerator> {
     const module = await WebAssembly.compile(wasmBytes)
-    const runtime = new EmscriptenRuntime()
-
-    const imports = {
-      ...runtime.getImports()
-    }
-    
-    const instance = await WebAssembly.instantiate(module, imports)
+    const runtime = new EmscriptenRuntime(module)
+    const instance = await runtime.instantiate()
     return new WasmGenerator(instance)
   }
 }

@@ -28,7 +28,7 @@ export default function DeployGeneratorStory() {
         fee_rate: 1,
       }
 
-      const inscriptionId = await bitseed.generator(wasmBytes, deployOptions)
+      const inscriptionId = await bitseed.generator("simple", wasmBytes, deployOptions)
       setDeployResult(inscriptionId)
       setError(undefined)
     } catch (e) {

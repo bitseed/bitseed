@@ -29,8 +29,14 @@ export default function DeployStory() {
     try {
       let generator = parseInscriptionID(generatorValue)
 
+      const deployArgs = [
+        `{"height":{"type":"range","data":{"min":1,"max":1000}}}`
+      ];
+
       const deployOptions: DeployOptions = {
         fee_rate: 1,
+        repeat: 1,
+        deploy_args: deployArgs,
       }
 
       const inscriptionId = await bitseed.deploy(tick, max, generator, deployOptions)

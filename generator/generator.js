@@ -811,13 +811,6 @@ var tempI64;
       return 0;
     };
 
-  /** @type {function(...*):?} */
-  function _log_string(
-  ) {
-  abort('missing function: log_string');
-  }
-  _log_string.stub = true;
-
   
   var runtimeKeepaliveCounter = 0;
   var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
@@ -1025,8 +1018,6 @@ var wasmImports = {
   fd_seek: _fd_seek,
   /** @export */
   fd_write: _fd_write,
-  /** @export */
-  log_string: _log_string,
   /** @export */
   proc_exit: _proc_exit
 };

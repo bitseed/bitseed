@@ -1,12 +1,10 @@
 import * as bitcoin from 'bitcoinjs-lib'
 import { BitSeed } from './bitseed';
-import { Ordit, IDatasource, UTXOLimited, GetSpendablesOptions, RelayOptions} from '@sadoprotocol/ordit-sdk';
+import { Ordit, IDatasource, RelayOptions} from '@sadoprotocol/ordit-sdk';
 import { IGeneratorLoader } from './generator';
 import { SFTRecord, InscriptionID } from './types';
-import { decodeScriptPubKey } from './utils'
 
 const networkType = 'testnet'
-const network = bitcoin.networks.testnet;
 
 describe('BitSeed', () => {
   let primaryWallet: Ordit;
@@ -69,46 +67,9 @@ describe('BitSeed', () => {
 
 
     it('should deposit reveal fee and inscribe successfully', async () => {
-      const mempool = new Map<string, UTXOLimited[]>()
-
-      const getOrCreateUTXOS =(mempool: Map<string, UTXOLimited[]>, address: string)=>{
-        let utxos = mempool.get(address)
-        if (!utxos) {
-          utxos = new Array<UTXOLimited>()
-          mempool.set(address, utxos)
-        }
-
-        return utxos
-      }
-
-      datasourceMock.getSpendables.mockImplementation(function (opts: GetSpendablesOptions): Promise<UTXOLimited[]> {
-        let utxos = (mempool.get(opts.address) || new Array<UTXOLimited>()).
-          filter((utxo)=>utxo.sats >= opts.value)
-        
-        return new Promise<UTXOLimited[]>(function(resolve){
-          resolve(utxos)
-        })
-      })
-
       datasourceMock.relay.mockImplementation(function ({ hex }: RelayOptions): Promise<string> {
-        console.log('singedHex:', hex)
-
         const tx = bitcoin.Transaction.fromHex(hex)
         const txid = tx.getId()
-
-        Array.from(tx.outs).map((output, index)=>{
-          const address = bitcoin.address.fromOutputScript(output.script, network)
-          const scriptPubKey = decodeScriptPubKey(output.script.toString('hex'), network)
-          const utxo = {
-            n: index,
-            txid: txid,
-            sats: output.value,
-            scriptPubKey: scriptPubKey
-          }
-
-          const utxos = getOrCreateUTXOS(mempool, address)
-          utxos.push(utxo)
-        })
 
         return new Promise<string>(function(resolve){
           resolve(txid)
