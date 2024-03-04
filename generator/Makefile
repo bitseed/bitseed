@@ -14,11 +14,13 @@ TARGET_JS = generator.js
 # -O3 for optimization, --no-entry to indicate no main() function
 # EXPORTED_FUNCTIONS to list the functions you want to call from JavaScript
 # ALLOW_MEMORY_GROWTH to allow the memory to grow at runtime if needed
-CXXFLAGS = --no-entry \
+CXXFLAGS = -g0 -O1 --no-entry \
+	-s STANDALONE_WASM=1 \
 	-s WASM=1 \
 	-s WARN_ON_UNDEFINED_SYMBOLS=0 \
-	-s EXPORTED_FUNCTIONS='["_inscribe_generate", "_inscribe_verify", "_indexer_generate"]' \
-	-s ALLOW_MEMORY_GROWTH=1
+	-s EXPORTED_FUNCTIONS='["_inscribe_generate", "_inscribe_verify"]' \
+	-s DEFAULT_LIBRARY_FUNCS_TO_INCLUDE='["stringToUTF8"]' \
+	-s EXPORTED_RUNTIME_METHODS='["cwrap"]'
 
 # Define the build rule
 .PHONY: all build

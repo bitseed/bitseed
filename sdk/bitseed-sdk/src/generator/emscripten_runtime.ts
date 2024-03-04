@@ -2,23 +2,102 @@
 var out = console.log.bind(console);
 var err = console.error.bind(console);
 
-var getHeapMax = () =>
-  // Stay one Wasm page short of 4GB: while e.g. Chrome is able to allocate
-  // full 4GB Wasm memories, the size will wrap back to 0 bytes in Wasm side
-  // for any code that deals with heap sizes, which would require special
-  // casing all heap size related code to treat 0 specially.
-  2147483648;
+var UTF8Decoder = typeof TextDecoder != 'undefined' ? new TextDecoder('utf8') : undefined;
+
+/**
+ * Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
+ * array that contains uint8 values, returns a copy of that string as a
+ * Javascript String object.
+ * heapOrArray is either a regular array, or a JavaScript typed array view.
+ * @param {number} idx
+ * @param {number=} maxBytesToRead
+ * @return {string}
+ */
+var UTF8ArrayToString = (heapOrArray: any, idx: any, maxBytesToRead: any) => {
+  var endIdx = idx + maxBytesToRead;
+  var endPtr = idx;
+  // TextDecoder needs to know the byte length in advance, it doesn't stop on
+  // null terminator by itself.  Also, use the length info to avoid running tiny
+  // strings through TextDecoder, since .subarray() allocates garbage.
+  // (As a tiny code save trick, compare endPtr against endIdx using a negation,
+  // so that undefined means Infinity)
+  while (heapOrArray[endPtr] && !(endPtr >= endIdx)) ++endPtr;
+
+  if (endPtr - idx > 16 && heapOrArray.buffer && UTF8Decoder) {
+    return UTF8Decoder.decode(heapOrArray.subarray(idx, endPtr));
+  }
+  var str = '';
+  // If building with TextDecoder, we have already computed the string length
+  // above, so test loop end condition against that
+  while (idx < endPtr) {
+    // For UTF8 byte structure, see:
+    // http://en.wikipedia.org/wiki/UTF-8#Description
+    // https://www.ietf.org/rfc/rfc2279.txt
+    // https://tools.ietf.org/html/rfc3629
+    var u0 = heapOrArray[idx++];
+    if (!(u0 & 0x80)) { str += String.fromCharCode(u0); continue; }
+    var u1 = heapOrArray[idx++] & 63;
+    if ((u0 & 0xE0) == 0xC0) { str += String.fromCharCode(((u0 & 31) << 6) | u1); continue; }
+    var u2 = heapOrArray[idx++] & 63;
+    if ((u0 & 0xF0) == 0xE0) {
+      u0 = ((u0 & 15) << 12) | (u1 << 6) | u2;
+    } else {
+      u0 = ((u0 & 7) << 18) | (u1 << 12) | (u2 << 6) | (heapOrArray[idx++] & 63);
+    }
+
+    if (u0 < 0x10000) {
+      str += String.fromCharCode(u0);
+    } else {
+      var ch = u0 - 0x10000;
+      str += String.fromCharCode(0xD800 | (ch >> 10), 0xDC00 | (ch & 0x3FF));
+    }
+  }
+  return str;
+};
+
+var printCharBuffers = [null, [], []];
+
+var printChar = (stream: any, curr: any) => {
+  var buffer = printCharBuffers[stream];
+  if (buffer) {
+    if (curr === 0 || curr === 10) {
+      (stream === 1 ? out : err)(UTF8ArrayToString(buffer, 0, undefined));
+      buffer.length = 0;
+    } else {
+      buffer.push(curr as never);
+    }
+  }
+};
+
+class ExitStatus {
+  public name: string;
+  public message: string;
+  public status: number;
+
+  constructor(status: number) {
+    this.name = 'ExitStatus';
+    this.message = `Program terminated with exit(${status})`;
+    this.status = status;
+  }
+}
 
 export class EmscriptenRuntime {
+  private memory: WebAssembly.Memory;
+  private table: WebAssembly.Table;
+  private writefdCount: number = 0;
+
   public ABORT: boolean = false;
   public EXITSTATUS: number = 0;
 
-  private memory: WebAssembly.Memory;
-  private table: WebAssembly.Table;
+  public HEAPU8: Uint8Array;
+  public HEAPU32: Uint32Array;
 
   constructor() {
-    this.memory = new WebAssembly.Memory({ initial: 1024*10 });
+    this.memory = new WebAssembly.Memory({ initial: 65536 });
     this.table = new WebAssembly.Table({ initial: 0, element: 'anyfunc' });
+
+    this.HEAPU8 = new Uint8Array(this.memory.buffer)
+    this.HEAPU32 = new Uint32Array(this.memory.buffer)
   }
 
   getMemory(): WebAssembly.Memory {
@@ -36,157 +115,65 @@ export class EmscriptenRuntime {
         tableBase: 0,
         memory: this.memory,
         table: this.table,
-         /** @export */
-        __assert_fail: ()=>{
-          console.log("assert_fail")
-        },
-        /** @export */
-        __cxa_throw: ()=>{
-          console.log("cxa_throw")
-        },
-        /** @export */
-        abort: ()=>{
-          console.log("abort")
-        },
-        /** @export */
-        emscripten_memcpy_js: ()=>{
-          console.log("emscripten_memcpy_js")
-        },
-        /** @export */
-        emscripten_resize_heap: this.buildResizeHeapFunc(),
-        log_string: (offset: number, length: number)=>{
+        log_string: (offset: number, length: number) => {
           console.log('log_string offset:', offset, 'length:', length)
           const bytes = new Uint8Array(this.memory.buffer, offset, length);
-          const string = new TextDecoder('utf8').decode(bytes);
+          out(bytes)
+          const string = UTF8ArrayToString(bytes, 0, undefined);
           out(string);
         }
       },
       wasi_snapshot_preview1: {
-        fd_write: () => {console.log('fd_write called')},
-        fd_seek: () => {console.log('fd_seek called')},
-        fd_close: () => {console.log('fd_close called')},
-        proc_exit: () => {console.log('proc_exit called')},
+        fd_write: (fd: any, iov: any, iovcnt: any, pnum: any) => {
+          this.fd_write(fd, iov, iovcnt, pnum)
+        },
+        fd_seek: (fd: any, offset_low: any, offset_high: any, whence: any, new_offset: any) => {
+          this.fd_seek(fd, offset_low, offset_high, whence, new_offset)
+        },
+        fd_close: (fd: any) => {
+          this.fd_close(fd)
+        },
+        proc_exit: (code: any) => {
+          this.proc_exit(code)
+        },
       }
     }
 
     return wasmImports
   }
 
-  HEAPU8() {
-    return new Uint8Array(this.memory.buffer)
-  }
-
-  abort(what: any) {
-    what = 'Aborted(' + what + ')';
-    // TODO(sbc): Should we remove printing and leave it up to whoever
-    // catches the exception?
-    err(what);
-  
-    this.ABORT = true;
-    this.EXITSTATUS = 1;
-  
-    // Use a wasm runtime error, because a JS error might be seen as a foreign
-    // exception, which means we'd run destructors on it. We need the error to
-    // simply make the program stop.
-    // FIXME This approach does not work in Wasm EH because it currently does not assume
-    // all RuntimeErrors are from traps; it decides whether a RuntimeError is from
-    // a trap or not based on a hidden field within the object. So at the moment
-    // we don't have a way of throwing a wasm trap from JS. TODO Make a JS API that
-    // allows this in the wasm spec.
-  
-    // Suppress closure compiler warning here. Closure compiler's builtin extern
-    // definition for WebAssembly.RuntimeError claims it takes no arguments even
-    // though it can.
-    // TODO(https://github.com/google/closure-compiler/pull/3913): Remove if/when upstream closure gets fixed.
-    /** @suppress {checkTypes} */
-    var e = new WebAssembly.RuntimeError(what);
-  
-    // Throw the error whether or not MODULARIZE is set because abort is used
-    // in code paths apart from instantiation where an exception is expected
-    // to be thrown when abort is called.
-    throw e;
-  }
-
-  assert(condition: any, text?: any) {
-    if (!condition) {
-      this.abort('Assertion failed' + (text ? ': ' + text : ''));
+  fd_write(fd: any, iov: any, iovcnt: any, pnum: any) {
+    this.writefdCount++
+    if (this.writefdCount % 1000 == 0) {
+      console.log('writefdCount:', this.writefdCount)
     }
-  }
-
-  growMemory(size: any): number {
-    var b = this.memory.buffer;
-    var pages = (size - b.byteLength + 65535) / 65536;
-
-    try {
-      // round size grow request up to wasm page size (fixed 64KB per spec)
-      this.memory.grow(pages); // .grow() takes a delta compared to the previous size
-      return 1 /*success*/;
-    } catch(e) {
-      err(`growMemory: Attempted to grow heap from ${b.byteLength} bytes to ${size} bytes, but got error: ${e}`);
-      return 0
+    
+    // hack to support printf in SYSCALLS_REQUIRE_FILESYSTEM=0
+    var num = 0;
+    for (var i = 0; i < iovcnt; i++) {
+      var ptr = this.HEAPU32[((iov) >> 2)];
+      var len = this.HEAPU32[(((iov) + (4)) >> 2)];
+      iov += 8;
+      for (var j = 0; j < len; j++) {
+        printChar(fd, this.HEAPU8[ptr + j]);
+      }
+      num += len;
     }
-    // implicit 0 return to save code size (caller will cast "undefined" into 0
-    // anyhow)
-  };
-
-  buildResizeHeapFunc() {
-    return (requestedSize: any) => {
-      console.log("emscripten_resize_heap, requestedSize:", requestedSize)
-
-      var oldSize = this.HEAPU8().length;
-      // With CAN_ADDRESS_2GB or MEMORY64, pointers are already unsigned.
-      requestedSize >>>= 0;
-      // With multithreaded builds, races can happen (another thread might increase the size
-      // in between), so return a failure, and let the caller retry.
-      this.assert(requestedSize > oldSize);
-    
-      // Memory resize rules:
-      // 1.  Always increase heap size to at least the requested size, rounded up
-      //     to next page multiple.
-      // 2a. If MEMORY_GROWTH_LINEAR_STEP == -1, excessively resize the heap
-      //     geometrically: increase the heap size according to
-      //     MEMORY_GROWTH_GEOMETRIC_STEP factor (default +20%), At most
-      //     overreserve by MEMORY_GROWTH_GEOMETRIC_CAP bytes (default 96MB).
-      // 2b. If MEMORY_GROWTH_LINEAR_STEP != -1, excessively resize the heap
-      //     linearly: increase the heap size by at least
-      //     MEMORY_GROWTH_LINEAR_STEP bytes.
-      // 3.  Max size for the heap is capped at 2048MB-WASM_PAGE_SIZE, or by
-      //     MAXIMUM_MEMORY, or by ASAN limit, depending on which is smallest
-      // 4.  If we were unable to allocate as much memory, it may be due to
-      //     over-eager decision to excessively reserve due to (3) above.
-      //     Hence if an allocation fails, cut down on the amount of excess
-      //     growth, in an attempt to succeed to perform a smaller allocation.
-    
-      // A limit is set for how much we can grow. We should not exceed that
-      // (the wasm binary specifies it, so if we tried, we'd fail anyhow).
-      var maxHeapSize = getHeapMax();
-      if (requestedSize > maxHeapSize) {
-        err(`Cannot enlarge memory, requested ${requestedSize} bytes, but the limit is ${maxHeapSize} bytes!`);
-        return false;
-      }
-    
-      var alignUp = (x: any, multiple: any) => x + (multiple - x % multiple) % multiple;
-    
-      var newSize = 0;
-
-      // Loop through potential heap size increases. If we attempt a too eager
-      // reservation that fails, cut down on the attempted size and reserve a
-      // smaller bump instead. (max 3 times, chosen somewhat arbitrarily)
-      for (var cutDown = 1; cutDown <= 4; cutDown *= 2) {
-        var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown); // ensure geometric growth
-        // but limit overreserving (default to capping at +96MB overgrowth at most)
-        overGrownHeapSize = Math.min(overGrownHeapSize, requestedSize + 100663296 );
-    
-        newSize = Math.min(maxHeapSize, alignUp(Math.max(requestedSize, overGrownHeapSize), 65536));
-    
-        var replacement = this.growMemory(newSize);
-        if (replacement) {
-          console.log('growMemory ok')
-          return true;
-        }
-      }
-      err(`Failed to grow the heap from ${oldSize} bytes to ${newSize} bytes, not enough memory!`);
-      return false;
-    };
+    this.HEAPU32[((pnum) >> 2)] = num;
+    return 0;
   }
+
+  fd_seek(_fd: any, _offset_low: any, _offset_high: any, _whence: any, _new_offset: any) {
+    return 70;
+  }
+
+  fd_close(_fd: any) {
+    return 52;
+  }
+
+  proc_exit(code: any) {
+    this.EXITSTATUS = code;
+    throw new ExitStatus(code);
+  }
+
 }
