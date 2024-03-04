@@ -55,7 +55,7 @@
     "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
-    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-v2.4.7.tgz",
+    "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-v2.4.9.tgz",
     "@types/randomstring": "^1.1.11",
     "@yubing744/rooch-sdk": "^0.1.0",
     "bip39": "^3.1.0",

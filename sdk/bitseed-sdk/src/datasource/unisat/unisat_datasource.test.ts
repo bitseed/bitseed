@@ -97,6 +97,18 @@ describe('UniSatDataSource', () => {
       expect(inscription.value).toBe(1000)
       expect(inscription.meta).toStrictEqual({})
     });
+
+    it('should return the correct Inscription for getInscription for generator wasm', async () => {
+      const inscription = await instance.getInscription({ id: '6f55475ce65054aa8371d618d217da8c9a764cecdaf4debcbce8d6312fe6b4d8i0', decodeMetadata: true });
+      console.log('generator inscription:', inscription)
+      expect(inscription).toBeDefined()
+    });
+
+    it('should return the correct Inscription for getInscription for move tick', async () => {
+      const inscription = await instance.getInscription({ id: '75e95eeba0b3450feda8d880efe00600816e5934160a4757fbdaa99a0e3bb436i0', decodeMetadata: true });
+      console.log('move tick inscription:', inscription)
+      expect(inscription).toBeDefined()
+    });
   });
   
 

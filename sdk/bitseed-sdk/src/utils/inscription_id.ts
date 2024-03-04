@@ -17,3 +17,17 @@ export function parseInscriptionID(id: string): InscriptionID {
 export function inscriptionIDToString(inscriptionID: InscriptionID): string {
   return `${inscriptionID.txid}i${inscriptionID.index}`
 }
+
+export function extractInscription(generator: string): string | null {
+  const match = generator.match(/\/inscription\/([a-f0-9]+i[0-9])/i);
+  return match ? match[1] : null;
+}
+
+export function extractInscriptionID(generator: string): InscriptionID | null {
+  const id = extractInscription(generator)
+  if (!id) {
+    return null
+  }
+
+  return parseInscriptionID(id)
+}

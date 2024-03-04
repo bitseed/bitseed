@@ -1,7 +1,7 @@
 # Makefile for building the generator.cpp into WebAssembly using Emscripten
 
 # Define the compiler to be the Emscripten C++ Compiler
-CXX = em++
+CXX = emcc
 
 # Define the source files
 SRC = generator.cpp

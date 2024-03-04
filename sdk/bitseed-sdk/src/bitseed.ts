@@ -4,9 +4,10 @@ import { Inscriber, Ordit, ordit, UTXOLimited } from '@sadoprotocol/ordit-sdk'
 
 import { BITSEED_PROTOAL_NAME } from './constants'
 import { InscriptionID, Generator, Tick, SFTRecord } from './types'
-import { inscriptionIDToString, toB64, decodeUTXOs } from './utils'
+import { inscriptionIDToString, extractInscriptionID, toB64, decodeUTXOs } from './utils'
 import { IGeneratorLoader } from './generator'
 import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
+import { BitseedSDKError } from './errors'
 
 export class BitSeed implements APIInterface {
   private network: bitcoin.Network
@@ -53,7 +54,7 @@ export class BitSeed implements APIInterface {
     let contentType: string | undefined = undefined
     let body: string | undefined = undefined
 
-    if (sft.content) {
+    if (sft.content && sft.content.content_type && sft.content.body) {
       contentType = sft.content.content_type
       body = toB64(sft.content.body)
     }
@@ -134,6 +135,7 @@ export class BitSeed implements APIInterface {
         },
       ],
       network: this.fundingWallet.network,
+      datasource: this.datasource,
       satsPerByte: opts?.commit_fee_rate || opts?.fee_rate || 1,
     })
 
@@ -159,7 +161,7 @@ export class BitSeed implements APIInterface {
       }
     }
 
-    return this.inscribe(sft, opts)
+    return await this.inscribe(sft, opts)
   }
 
   public async deploy(
@@ -179,7 +181,7 @@ export class BitSeed implements APIInterface {
       }
     }
 
-    return this.inscribe(sft, opts)
+    return await this.inscribe(sft, opts)
   }
 
   public async mint(
@@ -199,7 +201,7 @@ export class BitSeed implements APIInterface {
     sft.op = "mint"
     sft.tick = tick.tick;
 
-    return this.inscribe(sft, opts)
+    return await this.inscribe(sft, opts)
   }
 
   private async getTickByInscriptionId(inscription_id: InscriptionID): Promise<Tick> {
@@ -208,7 +210,23 @@ export class BitSeed implements APIInterface {
       decodeMetadata: false,
     })
 
-    const tick = JSON.parse(tickInscription.mediaContent) as Tick
+    if (!tickInscription.meta) {
+      throw new BitseedSDKError('tick meta is nil');
+    }
+
+    const generatorInscriptionId = extractInscriptionID(tickInscription.meta.attributes['generator'])
+    if (!generatorInscriptionId) {
+      throw new BitseedSDKError('generator inscriptionid is nil');
+    }
+
+    const tick: Tick  = {
+      tick: tickInscription.meta.tick,
+      max: tickInscription.meta.amount,
+      generator: generatorInscriptionId,
+      repeat: tickInscription.meta.attributes['repeat'],
+      deploy_args: tickInscription.meta.attributes['deploy_args']
+    }
+
     return tick
   }
 

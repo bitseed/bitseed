@@ -5,6 +5,5 @@ export type Tick = {
   max: number
   generator: InscriptionID
   repeat: number
-  has_user_input: boolean
   deploy_args: Array<string>
 }

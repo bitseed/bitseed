@@ -20,6 +20,14 @@ export function createTestBitSeed(): BitSeed {
     type: 'taproot',
   })
 
+  /*
+  const fundingWallet = new Ordit({
+    wif: 'cTW1Q2A8AVBuJ1sEBoV9gWokc6e5NYFPHxez6hhriVL2jKH6bfct',
+    network,
+    type: 'taproot',
+  })
+  */
+
   console.log('primary wallet address:', primaryWallet.selectedAddress)
   console.log('funding wallet address:', fundingWallet.selectedAddress)
 

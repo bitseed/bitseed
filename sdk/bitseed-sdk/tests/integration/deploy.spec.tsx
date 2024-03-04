@@ -4,15 +4,17 @@ import DeployStory from './deploy.story'
 
 test.use({ viewport: { width: 500, height: 500 } })
 
-test('Deploy tick with generator inscription_id', async ({ mount }) => {
+test('Deploy move tick with simple generator', async ({ mount }) => {
   const component = await mount(<DeployStory />)
 
-  const inscriptionId = 'dd1f515b828eedabd6b0be147cf611ca08c20f39058feee9b96efaa2eba43d9di0'
+  const generatorInscriptionId = '6f55475ce65054aa8371d618d217da8c9a764cecdaf4debcbce8d6312fe6b4d8i0'
+  const deployArg = `{"height":{"type":"range","data":{"min":1,"max":1000}}}`
 
   // Input the InscriptionID
   await component.locator('input[placeholder="Tick"]').fill('move')
   await component.locator('input[placeholder="Max"]').fill('1000')
-  await component.locator('input[placeholder="InscriptionID"]').fill(inscriptionId)
+  await component.locator('input[placeholder="GeneratorInscriptionID"]').fill(generatorInscriptionId)
+  await component.locator('input[placeholder="DeployArg"]').fill(deployArg)
 
   // Click the deploy button
   await component.locator('button:has-text("Deploy")').click()

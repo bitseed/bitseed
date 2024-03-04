@@ -14,6 +14,7 @@ export default function DeployStory() {
   const [tick, setTick] = useState<string>('')
   const [max, setMax] = useState<number>(0)
   const [generatorValue, setGeneratorValue] = useState<string>('')
+  const [deployArg, setDeployArg] = useState<string>('')
   const [deployResult, setDeployResult] = useState<InscriptionID | undefined>(undefined)
   const [error, setError] = useState<string | undefined>(undefined)
 
@@ -28,10 +29,7 @@ export default function DeployStory() {
 
     try {
       let generator = parseInscriptionID(generatorValue)
-
-      const deployArgs = [
-        `{"height":{"type":"range","data":{"min":1,"max":1000}}}`
-      ];
+      const deployArgs = [deployArg];
 
       const deployOptions: DeployOptions = {
         fee_rate: 1,
@@ -53,24 +51,38 @@ export default function DeployStory() {
     <div>
       <div>Deploy Tick</div>
       <div>
-        <input
+        Tick: <input
           type="text"
           placeholder="Tick"
           value={tick}
           onChange={(e) => setTick(e.target.value)}
         />
-        <input
+        <br />
+
+        Max: <input
           type="number"
           placeholder="Max"
           value={max}
           onChange={(e) => setMax(Number(e.target.value))}
         />
-        <input
+        <br />
+
+        GeneratorInscriptionID: <input
           type="text"
-          placeholder="InscriptionID"
+          placeholder="GeneratorInscriptionID"
           value={generatorValue}
           onChange={(e) => setGeneratorValue(e.target.value)}
         />
+        <br />
+
+        DeployArg: <input
+          type="text"
+          placeholder="DeployArg"
+          value={deployArg}
+          onChange={(e) => setDeployArg(e.target.value)}
+        />
+        <br />
+        
         <button onClick={handleDeploy}>Deploy</button>
       </div>
       {deployResult && <div>Deploy Result: {inscriptionIDToString(deployResult)}</div>}
