@@ -12,7 +12,7 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:unit:debug": "jest src/bitseed.test.ts",
+    "test:unit:debug": "jest src/datasource/unisat/unisat_datasource.test.ts",
     "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
@@ -55,14 +55,15 @@
     "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
+    "@mempool/mempool.js": "^2.3.0",
     "@sadoprotocol/ordit-sdk": "./libs/sadoprotocol-ordit-sdk-v2.4.9.tgz",
     "@types/randomstring": "^1.1.11",
     "@yubing744/rooch-sdk": "^0.1.0",
     "bip39": "^3.1.0",
     "bitcoinjs-lib": "^6.1.5",
+    "cbor": "^9.0.2",
     "commander": "^10.0.0",
     "decimal.js": "^10.4.3",
-    "randomstring": "^1.2.3",
-    "cbor": "^9.0.2"
+    "randomstring": "^1.2.3"
   }
 }

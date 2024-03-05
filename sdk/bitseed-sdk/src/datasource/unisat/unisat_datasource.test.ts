@@ -95,7 +95,12 @@ describe('UniSatDataSource', () => {
       expect(inscription.mediaSize).toBe(101)
       expect(inscription.mediaContent).toBe('AGFzbQEAAAABCAJgAX8AYAAAAg8BB2NvbnNvbGUDbG9nAAADAgEBBQMBAAEHFwIGbWVtb3J5AgAKaGVsbG9Xb3JsZAABCggBBgBBABAACwsUAQBBAAsOSGVsbG8sIFdvcmxkIQA=')
       expect(inscription.value).toBe(1000)
-      expect(inscription.meta).toStrictEqual({})
+      expect(inscription.meta).toStrictEqual({
+        op: 'mint',
+        tick: 'generator',
+        amount: 1,
+        attributes: undefined
+      })
     });
 
     it('should return the correct Inscription for getInscription for generator wasm', async () => {
@@ -111,7 +116,6 @@ describe('UniSatDataSource', () => {
     });
   });
   
-
   describe('getInscriptions', () => {
     jest.setTimeout(20000)
     
@@ -122,17 +126,27 @@ describe('UniSatDataSource', () => {
     });
   });
 
-  //TODO apply APIKEY
-  /*
   describe('getTransaction', () => {
     jest.setTimeout(20000)
     
     it('should return the correct TX for getTransaction', async () => {
       const resp = await instance.getTransaction({ txId: '42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5' });
+      console.log("resp:", resp)
+      expect(resp).toBeDefined()
+    });
+
+    it('should return the raw TX for getTransaction', async () => {
+      const resp = await instance.getTransaction({ 
+        txId: '42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5',
+        ordinals: true,
+        hex: true,
+        witness: true,
+        decodeMetadata: true,
+      });
+      console.log("raw resp:", resp)
       expect(resp).toBeDefined()
     });
   });
-  */
 
   describe('getSpendables', () => {
     jest.setTimeout(20000)
