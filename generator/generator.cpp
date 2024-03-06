@@ -1,5 +1,6 @@
-#include <nlohmann/json.hpp>
 #include <emscripten.h>
+#include "nlohmann/json.hpp"
+
 using json = nlohmann::json;
 
 #ifdef __cplusplus
@@ -43,7 +44,11 @@ char * int_to_bytes(uint32_t n) {
 }
 
 EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
+    printf("inscribe_generate_start\n");
+
     uint32_t buffer_length = get_data_length(buffer);
+    printf("buffer_length: %d\n", buffer_length);
+
     std::vector<uint8_t> buffer_vec;
     buffer_vec.insert(buffer_vec.end(), buffer + 4, buffer + 4 + buffer_length);
     json json_object_top = json::from_cbor(buffer_vec.begin(), buffer_vec.end());
@@ -52,9 +57,11 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
 
     std::string seed;
     json_object_top["seed"].get_to(seed);
+    printf("seed: %s\n", seed.c_str());
 
     std::string user_input;
     json_object_top["user_input"].get_to(user_input);
+    printf("user_input: %s\n", user_input.c_str());
 
     std::vector<uint8_t> attrs_buffer;
     json_object_top["attrs"].get_to(attrs_buffer);
@@ -100,6 +107,9 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
     char * buffer_output = (char *)malloc(sizeof(char) * dump_len + 4);
     memcpy(buffer_output, length_bytes, 4);
     memcpy(buffer_output + 4, output, dump_len);
+
+    printf("inscribe_generate_end\n");
+
     return buffer_output;
 }
 

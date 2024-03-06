@@ -191,7 +191,7 @@ var err = Module['printErr'] || console.error.bind(console);
 // Merge back in the overrides
 Object.assign(Module, moduleOverrides);
 // Free the object hierarchy contained in the overrides, this lets the GC
-// reclaim data used e.g. in memoryInitializerRequest, which is a large typed array.
+// reclaim data used.
 moduleOverrides = null;
 
 // Emit code to handle expected values on the Module object. This applies Module.x
@@ -206,8 +206,8 @@ if (Module['thisProgram']) thisProgram = Module['thisProgram'];
 if (Module['quit']) quit_ = Module['quit'];
 
 // perform assertions in shell.js after we set up out() and err(), as otherwise if an assertion fails it cannot print the message
-
 // end include: shell.js
+
 // include: preamble.js
 // === Preamble library stuff ===
 
@@ -252,7 +252,7 @@ function assert(condition, text) {
   if (!condition) {
     // This build was created without ASSERTIONS defined.  `assert()` should not
     // ever be called in this configuration but in case there are callers in
-    // the wild leave this simple abort() implemenation here for now.
+    // the wild leave this simple abort() implementation here for now.
     abort(text);
   }
 }
@@ -277,6 +277,7 @@ var HEAP,
 /** @type {!Float64Array} */
   HEAPF64;
 
+// include: runtime_shared.js
 function updateMemoryViews() {
   var b = wasmMemory.buffer;
   Module['HEAP8'] = HEAP8 = new Int8Array(b);
@@ -288,7 +289,7 @@ function updateMemoryViews() {
   Module['HEAPF32'] = HEAPF32 = new Float32Array(b);
   Module['HEAPF64'] = HEAPF64 = new Float64Array(b);
 }
-
+// end include: runtime_shared.js
 // include: runtime_stack_check.js
 // end include: runtime_stack_check.js
 // include: runtime_assertions.js
@@ -428,7 +429,7 @@ function abort(what) {
   // allows this in the wasm spec.
 
   // Suppress closure compiler warning here. Closure compiler's builtin extern
-  // defintion for WebAssembly.RuntimeError claims it takes no arguments even
+  // definition for WebAssembly.RuntimeError claims it takes no arguments even
   // though it can.
   // TODO(https://github.com/google/closure-compiler/pull/3913): Remove if/when upstream closure gets fixed.
   /** @suppress {checkTypes} */
@@ -509,8 +510,6 @@ function getBinaryPromise(binaryFile) {
 function instantiateArrayBuffer(binaryFile, imports, receiver) {
   return getBinaryPromise(binaryFile).then((binary) => {
     return WebAssembly.instantiate(binary, imports);
-  }).then((instance) => {
-    return instance;
   }).then(receiver, (reason) => {
     err(`failed to asynchronously prepare wasm: ${reason}`);
 
@@ -617,8 +616,8 @@ var tempI64;
 // include: runtime_debug.js
 // end include: runtime_debug.js
 // === Body ===
-
 // end include: preamble.js
+
 
   /** @constructor */
   function ExitStatus(status) {
@@ -642,8 +641,8 @@ var tempI64;
   function getValue(ptr, type = 'i8') {
     if (type.endsWith('*')) type = '*';
     switch (type) {
-      case 'i1': return HEAP8[((ptr)>>0)];
-      case 'i8': return HEAP8[((ptr)>>0)];
+      case 'i1': return HEAP8[ptr];
+      case 'i8': return HEAP8[ptr];
       case 'i16': return HEAP16[((ptr)>>1)];
       case 'i32': return HEAP32[((ptr)>>2)];
       case 'i64': abort('to do getValue(i64) use WASM_BIGINT');
@@ -665,8 +664,8 @@ var tempI64;
   function setValue(ptr, value, type = 'i8') {
     if (type.endsWith('*')) type = '*';
     switch (type) {
-      case 'i1': HEAP8[((ptr)>>0)] = value; break;
-      case 'i8': HEAP8[((ptr)>>0)] = value; break;
+      case 'i1': HEAP8[ptr] = value; break;
+      case 'i8': HEAP8[ptr] = value; break;
       case 'i16': HEAP16[((ptr)>>1)] = value; break;
       case 'i32': HEAP32[((ptr)>>2)] = value; break;
       case 'i64': abort('to do setValue(i64) use WASM_BIGINT');
@@ -676,55 +675,6 @@ var tempI64;
       default: abort(`invalid type for setValue: ${type}`);
     }
   }
-
-  var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
-      // Parameter maxBytesToWrite is not optional. Negative values, 0, null,
-      // undefined and false each don't write out any bytes.
-      if (!(maxBytesToWrite > 0))
-        return 0;
-  
-      var startIdx = outIdx;
-      var endIdx = outIdx + maxBytesToWrite - 1; // -1 for string null terminator.
-      for (var i = 0; i < str.length; ++i) {
-        // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
-        // unit, not a Unicode code point of the character! So decode
-        // UTF16->UTF32->UTF8.
-        // See http://unicode.org/faq/utf_bom.html#utf16-3
-        // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description
-        // and https://www.ietf.org/rfc/rfc2279.txt
-        // and https://tools.ietf.org/html/rfc3629
-        var u = str.charCodeAt(i); // possibly a lead surrogate
-        if (u >= 0xD800 && u <= 0xDFFF) {
-          var u1 = str.charCodeAt(++i);
-          u = 0x10000 + ((u & 0x3FF) << 10) | (u1 & 0x3FF);
-        }
-        if (u <= 0x7F) {
-          if (outIdx >= endIdx) break;
-          heap[outIdx++] = u;
-        } else if (u <= 0x7FF) {
-          if (outIdx + 1 >= endIdx) break;
-          heap[outIdx++] = 0xC0 | (u >> 6);
-          heap[outIdx++] = 0x80 | (u & 63);
-        } else if (u <= 0xFFFF) {
-          if (outIdx + 2 >= endIdx) break;
-          heap[outIdx++] = 0xE0 | (u >> 12);
-          heap[outIdx++] = 0x80 | ((u >> 6) & 63);
-          heap[outIdx++] = 0x80 | (u & 63);
-        } else {
-          if (outIdx + 3 >= endIdx) break;
-          heap[outIdx++] = 0xF0 | (u >> 18);
-          heap[outIdx++] = 0x80 | ((u >> 12) & 63);
-          heap[outIdx++] = 0x80 | ((u >> 6) & 63);
-          heap[outIdx++] = 0x80 | (u & 63);
-        }
-      }
-      // Null-terminate the pointer to the buffer.
-      heap[outIdx] = 0;
-      return outIdx - startIdx;
-    };
-  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
-      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
-    };
 
   var _fd_close = (fd) => {
       return 52;
@@ -873,6 +823,13 @@ var tempI64;
       quit_(code, new ExitStatus(code));
     };
 
+  /** @type {function(...*):?} */
+  function _stringToUTF8(
+  ) {
+  abort('missing function: stringToUTF8');
+  }
+  _stringToUTF8.stub = true;
+
   /** @param {boolean|number=} implicit */
   var exitJS = (status, implicit) => {
       EXITSTATUS = status;
@@ -923,6 +880,54 @@ var tempI64;
       return len;
     };
   
+  var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
+      // Parameter maxBytesToWrite is not optional. Negative values, 0, null,
+      // undefined and false each don't write out any bytes.
+      if (!(maxBytesToWrite > 0))
+        return 0;
+  
+      var startIdx = outIdx;
+      var endIdx = outIdx + maxBytesToWrite - 1; // -1 for string null terminator.
+      for (var i = 0; i < str.length; ++i) {
+        // Gotcha: charCodeAt returns a 16-bit word that is a UTF-16 encoded code
+        // unit, not a Unicode code point of the character! So decode
+        // UTF16->UTF32->UTF8.
+        // See http://unicode.org/faq/utf_bom.html#utf16-3
+        // For UTF8 byte structure, see http://en.wikipedia.org/wiki/UTF-8#Description
+        // and https://www.ietf.org/rfc/rfc2279.txt
+        // and https://tools.ietf.org/html/rfc3629
+        var u = str.charCodeAt(i); // possibly a lead surrogate
+        if (u >= 0xD800 && u <= 0xDFFF) {
+          var u1 = str.charCodeAt(++i);
+          u = 0x10000 + ((u & 0x3FF) << 10) | (u1 & 0x3FF);
+        }
+        if (u <= 0x7F) {
+          if (outIdx >= endIdx) break;
+          heap[outIdx++] = u;
+        } else if (u <= 0x7FF) {
+          if (outIdx + 1 >= endIdx) break;
+          heap[outIdx++] = 0xC0 | (u >> 6);
+          heap[outIdx++] = 0x80 | (u & 63);
+        } else if (u <= 0xFFFF) {
+          if (outIdx + 2 >= endIdx) break;
+          heap[outIdx++] = 0xE0 | (u >> 12);
+          heap[outIdx++] = 0x80 | ((u >> 6) & 63);
+          heap[outIdx++] = 0x80 | (u & 63);
+        } else {
+          if (outIdx + 3 >= endIdx) break;
+          heap[outIdx++] = 0xF0 | (u >> 18);
+          heap[outIdx++] = 0x80 | ((u >> 12) & 63);
+          heap[outIdx++] = 0x80 | ((u >> 6) & 63);
+          heap[outIdx++] = 0x80 | (u & 63);
+        }
+      }
+      // Null-terminate the pointer to the buffer.
+      heap[outIdx] = 0;
+      return outIdx - startIdx;
+    };
+  var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
+      return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
+    };
   var stringToUTF8OnStack = (str) => {
       var size = lengthBytesUTF8(str) + 1;
       var ret = stackAlloc(size);
@@ -981,7 +986,7 @@ var tempI64;
           }
         }
       }
-      var ret = func.apply(null, cArgs);
+      var ret = func(...cArgs);
       function onDone(ret) {
         if (stack !== 0) stackRestore(stack);
         return convertReturnValue(ret);
@@ -1004,9 +1009,7 @@ var tempI64;
       if (numericRet && numericArgs && !opts) {
         return getCFunc(ident);
       }
-      return function() {
-        return ccall(ident, returnType, argTypes, arguments, opts);
-      }
+      return (...args) => ccall(ident, returnType, argTypes, args, opts);
     };
 var wasmImports = {
   /** @export */
@@ -1127,5 +1130,5 @@ if (Module['noInitialRun']) shouldRunNow = false;
 
 run();
 
-
 // end include: postamble.js
+
