@@ -7,7 +7,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
-  testDir: './tests/integration',
+  testDir: './tests/e2e',
   /* The base directory, relative to the config file, for snapshot files created with toMatchSnapshot and toHaveScreenshot. */
   snapshotDir: './__snapshots__',
   /* Maximum time one test can run for. */

@@ -22,20 +22,20 @@ yarn add bitseed-sdk
 
 ### Usage Example
 
-For usage examples, please refer to the integration test stories located at:
+For usage examples, please refer to the e2e test stories located at:
 
-- `tests/integration/generator.story.tsx`
-- `tests/integration/deploy.story.tsx`
-- `tests/integration/mint.story.tsx`
+- `tests/e2e/generator.story.tsx`
+- `tests/e2e/deploy.story.tsx`
+- `tests/e2e/mint.story.tsx`
 
 These stories provide practical examples of how to use the SDK for deploying generators, minting assets, and more.
 
-### Integration Testing
+### E2E Testing
 
-The Bitseed SDK includes a suite of integration tests to ensure functionality works as expected. To run these tests, use the following command:
+The Bitseed SDK includes a suite of e2e tests to ensure functionality works as expected. To run these tests, use the following command:
 
 ```bash
-npm run test:e2e
+npm run test:e2e:debug
 ```
 
 This command will execute end-to-end tests using Playwright. It's recommended to run these tests to verify that changes to the SDK do not break existing functionality.
