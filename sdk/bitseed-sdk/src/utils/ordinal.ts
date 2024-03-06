@@ -36,18 +36,15 @@ function getEnvelope(data: EnvelopeData[]): EnvelopeData[] | undefined {
   return data.slice(startIndex + 1, endIndex + 1);
 }
 
-function getEnvelopeMeta(data: EnvelopeData[]) {
-  const startIndex = data.indexOf(META_TAG);
-  if (startIndex === -1) {
-    return undefined;
-  }
-
+function getEnvelopeMetadata(data: EnvelopeData[]) {
   const content: Buffer[] = [];
-  for (const op of data.slice(startIndex + 1)) {
-    if (!isBuffer(op)) {
-      break;
+  
+  for (var i=0; i<data.length; i++) {
+    if (data[i] == META_TAG) {
+      if (isBuffer(data[i + 1])) {
+        content.push(data[i + 1] as Buffer);
+      }
     }
-    content.push(op);
   }
 
   try {
@@ -57,9 +54,9 @@ function getEnvelopeMeta(data: EnvelopeData[]) {
   }
 }
 
-export function decodeInscriptionMeta(signedTxHex: string, index: number): any {
+export function decodeInscriptionMetadata(signedTxHex: string, index: number): any {
   const tx = bitcoin.Transaction.fromHex(signedTxHex)
-  if (index < 0 || index > tx.ins.length) {
+  if (index < 0 || index >= tx.ins.length) {
     return undefined
   }
 
@@ -73,7 +70,7 @@ export function decodeInscriptionMeta(signedTxHex: string, index: number): any {
         const envelope = getEnvelope(data)
 
         if (envelope) {
-          return getEnvelopeMeta(envelope)
+          return getEnvelopeMetadata(envelope)
         }
 
         return undefined

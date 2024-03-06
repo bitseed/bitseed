@@ -285,6 +285,33 @@ describe('BitSeed', () => {
       expect(inscriptionID.index).toEqual(0);
       expect(datasourceMock.relay).toHaveBeenCalledTimes(2);
     });
+
+    it('deploy move tick with multi deploy arg should be ok', async () => {
+      const tick = 'move';
+      const max = 1000;
+      const generator = {
+        txid: '6f55475ce65054aa8371d618d217da8c9a764cecdaf4debcbce8d6312fe6b4d8',
+        index: 0,
+      }
+
+      const deployArgs = [];
+
+      for (var i=0; i<50; i++) {
+        deployArgs.push(`{"level${i}":{"type":"range","data":{"min":1,"max":1000}}}`)
+      }
+
+      const deployOptions: DeployOptions = {
+        fee_rate: 1,
+        repeat: 1,
+        deploy_args: deployArgs,
+      }
+
+      const inscriptionID = await bitSeed.deploy(tick, max, generator, deployOptions)
+
+      expect(inscriptionID).toHaveProperty('txid');
+      expect(inscriptionID.index).toEqual(0);
+      expect(datasourceMock.relay).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe('mint method', () => {

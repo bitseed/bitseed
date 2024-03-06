@@ -20,7 +20,7 @@ import {
 import { IUniSatOpenAPI, unisatTypes } from "../../api";
 import { decodeScriptPubKey } from '../../utils/bitcoin';
 import { BitseedSDKError } from '../../errors';
-import { toB64, decodeInscriptionMeta } from '../../utils';
+import { toB64, decodeInscriptionMetadata } from '../../utils';
 import { UnisatOpenApi } from '../../api'
 import { Network } from '../../types'
 
@@ -98,7 +98,7 @@ export class UniSatDataSource implements IDatasource {
 
         if (tx.tx && tx.tx.hex) {
           const tokens = inscription.output.split(":")
-          meta = decodeInscriptionMeta(tx.tx.hex, parseInt(tokens[1]))
+          meta = decodeInscriptionMetadata(tx.tx.hex, parseInt(tokens[1]))
         }
       }
     }

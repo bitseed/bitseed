@@ -12,7 +12,7 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:unit:debug": "jest src/bitseed.test.ts",
+    "test:unit:debug": "jest src/utils/ordinal.test.ts",
     "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
