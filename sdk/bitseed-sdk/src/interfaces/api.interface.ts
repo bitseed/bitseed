@@ -1,9 +1,10 @@
-import { Generator, InscriptionID } from '../types'
-
-// Define custom types that would be used in the interface
-type SatPoint = any // Replace 'any' with the actual type definition
-type FeeRate = number // Assuming FeeRate is a number representing sats/vbyte
-type Amount = number // Assuming Amount is a number representing satoshis
+import { 
+  SatPoint, 
+  FeeRate, 
+  Amount, 
+  Generator, 
+  InscriptionID 
+} from '../types'
 
 export interface NestedObject {
   [key: string]: NestedObject | any

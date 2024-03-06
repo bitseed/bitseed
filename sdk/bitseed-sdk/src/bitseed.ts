@@ -3,9 +3,14 @@ import { IDatasource } from '@sadoprotocol/ordit-sdk'
 import { Inscriber, Ordit, ordit, UTXOLimited } from '@sadoprotocol/ordit-sdk'
 
 import { BITSEED_PROTOAL_NAME } from './constants'
-import { InscriptionID, Generator, Tick, SFTRecord } from './types'
+import {
+  InscriptionID, 
+  Generator, 
+  Tick, 
+  SFTRecord
+} from './types'
 import { inscriptionIDToString, extractInscriptionID, toB64, decodeUTXOs } from './utils'
-import { IGeneratorLoader } from './generator'
+import { IGeneratorLoader, InscribeSeed } from './generator'
 import { APIInterface, DeployOptions, InscribeOptions } from './interfaces'
 import { BitseedSDKError } from './errors'
 
@@ -195,7 +200,14 @@ export class BitSeed implements APIInterface {
 
     let tick = await this.getTickByInscriptionId(tickInscriptionId)
     const generator = await this.generatorLoader.load(tick.generator)
-    const sft = await generator.inscribeGenerate(tick.deploy_args, opts?.satpoint, userInput)
+
+    let seed_utxo = opts.satpoint.outpoint;
+    let seed_tx = await this.datasource.getTransaction({
+      txId: seed_utxo.txid
+    })
+
+    const seed = new InscribeSeed(seed_tx.tx.blockhash, seed_utxo)
+    const sft = await generator.inscribeGenerate(tick.deploy_args, seed, userInput)
     console.log('SFT record:', sft)
 
     sft.op = "mint"
@@ -207,12 +219,14 @@ export class BitSeed implements APIInterface {
   private async getTickByInscriptionId(inscription_id: InscriptionID): Promise<Tick> {
     const tickInscription = await this.datasource.getInscription({
       id: inscriptionIDToString(inscription_id),
-      decodeMetadata: false,
+      decodeMetadata: true,
     })
 
     if (!tickInscription.meta) {
       throw new BitseedSDKError('tick meta is nil');
     }
+
+    console.log('tickInscription.meta:', tickInscription.meta)
 
     const generatorInscriptionId = extractInscriptionID(tickInscription.meta.attributes['generator'])
     if (!generatorInscriptionId) {

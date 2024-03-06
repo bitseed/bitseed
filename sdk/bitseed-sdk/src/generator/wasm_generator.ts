@@ -2,6 +2,7 @@ import cbor from 'cbor'
 import { IGenerator } from './interface'
 import { SFTRecord } from '../types'
 import { EmscriptenRuntime } from './emscripten_runtime'
+import { InscribeSeed } from './seed'
 
 export class WasmGenerator implements IGenerator {
   private wasmInstance: WebAssembly.Instance
@@ -12,14 +13,14 @@ export class WasmGenerator implements IGenerator {
 
   public async inscribeGenerate(
     deployArgs: Array<string>,
-    seed: string,
+    seed: InscribeSeed,
     userInput: string,
   ): Promise<SFTRecord> {
     // Convert deployArgs to a CBOR bytes
     const argsBytes = new Uint8Array(cbor.encodeOne(deployArgs.map((json)=>JSON.parse(json))))
 
     const input = {
-      "seed": seed,
+      "seed": seed.seed(),
       "user_input": userInput,
       "attrs": Array.from(argsBytes),
     }

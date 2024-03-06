@@ -1,15 +1,18 @@
 import path from 'path'
 import fs from 'fs';
 import * as bitcoin from 'bitcoinjs-lib'
+import { Transaction as BTCTransaction } from "bitcoinjs-lib";
 import { BitSeed } from './bitseed';
-import { 
-  Ordit, 
-  IDatasource, 
-  RelayOptions, 
-  GetSpendablesOptions, 
+import {
+  Ordit,
+  IDatasource,
+  RelayOptions,
+  GetSpendablesOptions,
   UTXOLimited,
   GetInscriptionOptions,
-  Inscription
+  Inscription,
+  GetTransactionOptions,
+  Transaction
 } from '@sadoprotocol/ordit-sdk';
 import { IGeneratorLoader, GeneratorLoader } from './generator';
 import { SFTRecord, InscriptionID } from './types';
@@ -27,6 +30,7 @@ const loadWasmBytesFromFile = (url: string) => {
 describe('BitSeed', () => {
   const mempool = new Map<string, UTXOLimited[]>();
   const inscriptionStore = new Map<string, Inscription>();
+  const txStore = new Map<string, Transaction>();
 
   let primaryWallet: Ordit;
   let fundingWallet: Ordit;
@@ -122,6 +126,25 @@ describe('BitSeed', () => {
       }
     });
 
+    txStore.set('42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5', {
+      txid: '42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5',
+      hash: '1722ca7fe748b507cea2bb6fe7ac14996407584fcaf76c5c34dfb38fa2d94efc',
+      version: 2,
+      size: 438,
+      vsize: 180,
+      weight: 720,
+      locktime: 0,
+      vin: [],
+      vout: [],
+      hex: '02000000000101415767e9a8aa3dbc9a200897c2b553ab4b5b6d4480f8e5485f0ced6e4b9d82130000000000fdffffff015802000000000000225120114002a1d9df42cd866b715e4477f79c848229be5a3eb83fa57f5831e4af509503405a4f4b80c92bf91c486017464cae0fe09e7238a0b0cdcd5f6eb7a6033b64866de5ac4e97cdf7f3952b2d4cb5649a5d33749fb6a36c006d462847183a633706c0d120e1f462719cc15cccd0fac248b5d478aed358bfe4835bb02c43c38b9a5f635ad8ac0063036f72640101106170706c69636174696f6e2f6a736f6e004c66b627249a8bde99ac75d34d207a77ab6ada2bfdca27b5e9edfdd7757f9d796fcdbc79e75a6dde9bd1b7b5e3b71feb5d5c6b4f1cdb47f7f74e7c7de79ef5bf7a79f69ad9e6dae3777d762d2b7a979ab7485ab3fbac7abfe29e9bad7da96c79d7a9968cbf6ab82c680063036f726401011e6170706c69636174696f6e2f6a736f6e3b636861727365743d7574662d3800027b7d6841c1e1f462719cc15cccd0fac248b5d478aed358bfe4835bb02c43c38b9a5f635ad8b890202e8c5bdceee485a7cca0f2c3f3e8b62866b26abe70036bd8bae6713c9d00000000',
+      blockhash: '00000000000000265bfdc4e465fda6f12248f13ad26bf22976931ef46589d8c6',
+      confirmations: 1776,
+      time: 1708478409,
+      blocktime: 1708478409,
+      fee: 0.0000018099999999999996,
+      blockheight: 2578904
+    })
+
     datasourceMock = {
       getBalance: jest.fn(),
       getInscription: jest.fn(),
@@ -132,7 +155,7 @@ describe('BitSeed', () => {
       getUnspents: jest.fn(),
       relay: jest.fn()
     };
-    
+
     generatorLoaderMock = new GeneratorLoader(datasourceMock)
 
     bitSeed = new BitSeed(
@@ -144,9 +167,9 @@ describe('BitSeed', () => {
 
     datasourceMock.getSpendables.mockImplementation(async function (opts: GetSpendablesOptions): Promise<UTXOLimited[]> {
       let utxos = (mempool.get(opts.address) || new Array<UTXOLimited>()).
-        filter((utxo)=>utxo.sats >= opts.value)
+        filter((utxo) => utxo.sats >= opts.value)
 
-      return new Promise<UTXOLimited[]>(function(resolve){
+      return new Promise<UTXOLimited[]>(function (resolve) {
         resolve(utxos)
       })
     })
@@ -155,8 +178,8 @@ describe('BitSeed', () => {
       const tx = bitcoin.Transaction.fromHex(hex)
       const txid = tx.getId()
 
-      return new Promise<string>(function(resolve){
-        setTimeout(()=>{
+      return new Promise<string>(function (resolve) {
+        setTimeout(() => {
           resolve(txid)
         }, 10)
       })
@@ -267,16 +290,37 @@ describe('BitSeed', () => {
   describe('mint method', () => {
 
     beforeEach(() => {
-      datasourceMock.getInscription.mockImplementation(async function({ id }: GetInscriptionOptions): Promise<Inscription>{
+      datasourceMock.getInscription.mockImplementation(async function ({ id }: GetInscriptionOptions): Promise<Inscription> {
         let inscription = inscriptionStore.get(id)
-  
-        return new Promise<Inscription>(function(resolve, reject){
+
+        return new Promise<Inscription>(function (resolve, reject) {
           if (!inscription) {
             reject('inscription not exists')
             return
           }
 
           resolve(inscription)
+        })
+      })
+
+      datasourceMock.getTransaction.mockImplementation(async function ({ txId }: GetTransactionOptions): Promise<{
+        tx: Transaction;
+        rawTx?: BTCTransaction;
+      }> {
+        let tx = txStore.get(txId)
+
+        return new Promise<{
+          tx: Transaction;
+          rawTx?: BTCTransaction;
+        }>(function (resolve, reject) {
+          if (!tx) {
+            reject('inscription not exists')
+            return
+          }
+
+          resolve({
+            tx,
+          })
         })
       })
     })
@@ -289,7 +333,13 @@ describe('BitSeed', () => {
 
       const inscribeOptions: InscribeOptions = {
         fee_rate: 1,
-        satpoint: 'xxx'
+        satpoint: {
+          outpoint: {
+            txid: '42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5',
+            vout: 0
+          },
+          offset: 0
+        }
       }
 
       const inscriptionID = await bitSeed.mint(tickInscriptionId, 'xxxx', inscribeOptions)

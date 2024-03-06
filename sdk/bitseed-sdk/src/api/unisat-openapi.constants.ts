@@ -216,6 +216,10 @@ export const OPENAPI_URL_MAINNET = 'https://open-api.unisat.io';
 export const OPENAPI_URL_TESTNET = 'https://open-api-testnet.unisat.io';
 export const OPENAPI_URL_REGTEST = 'https://open-api-regtest.unisat.io';
 
+export const ORDAPI_URL_MAINNET = 'https://ordinals.com';
+export const ORDAPI_URL_TESTNET = 'https://testnet.ordinals.com';
+export const ORDAPI_URL_REGTEST = 'https://regtest.ordinals.com';
+
 export const EVENTS = {
   broadcastToUI: 'broadcastToUI',
   broadcastToBackground: 'broadcastToBackground',

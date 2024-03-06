@@ -114,5 +114,5 @@ export interface IUniSatOpenAPI {
 
   getVersionDetail(version: string): Promise<VersionDetail>;
 
-  loadContent(uri: string): Promise<ArrayBuffer>;
+  loadContent(inscriptionid: string): Promise<ArrayBuffer>;
 }

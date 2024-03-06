@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs';
 
+import { InscribeSeed } from './seed'
 import { WasmGenerator } from './wasm_generator';
 
 const loadWasmModuleFromFile = async(url: string) => {
@@ -20,7 +21,11 @@ describe('WasmGenerator', () => {
       `{"height":{"type":"range","data":{"min":1,"max":1000}}}`
     ];
 
-    const seed = 'testSeed';
+    const seed = new InscribeSeed('testSeed', {
+      txid: '75e95eeba0b3450feda8d880efe00600816e5934160a4757fbdaa99a0e3bb436',
+      vout: 1,
+    });
+    
     const userInput = 'testUserInput';
 
     // Call the inscribeGenerate method

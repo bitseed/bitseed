@@ -9,7 +9,10 @@ import {
   WALLETAPI_URL_MAINNET, 
   WALLETAPI_URL_TESTNET, 
   WALLETAPI_URL_REGTEST,
-  VERSION 
+  VERSION, 
+  ORDAPI_URL_MAINNET,
+  ORDAPI_URL_TESTNET,
+  ORDAPI_URL_REGTEST
 } from './unisat-openapi.constants';
 import {
   AddressSummary,
@@ -35,6 +38,7 @@ import { IUniSatOpenAPI } from './unisat-openapi.interface'
 import { Network } from '../types'
 
 interface OpenApiStore {
+  ordAPIHost: string;
   walletAPIHost: string;
   host: string;
   deviceId: string;
@@ -61,6 +65,7 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
     this.store = {
       host: OPENAPI_URL_MAINNET,
       walletAPIHost: WALLETAPI_URL_MAINNET,
+      ordAPIHost: ORDAPI_URL_MAINNET,
       deviceId: randomstring.generate(12)
     };
 
@@ -68,14 +73,17 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
       this.network = bitcoin.networks.regtest
       this.store.host = OPENAPI_URL_REGTEST;
       this.store.walletAPIHost = WALLETAPI_URL_REGTEST;
+      this.store.ordAPIHost = ORDAPI_URL_REGTEST;
     } else if (networkType === 'testnet'){
       this.network = bitcoin.networks.testnet
       this.store.host = OPENAPI_URL_TESTNET;
       this.store.walletAPIHost = WALLETAPI_URL_TESTNET;
+      this.store.ordAPIHost = ORDAPI_URL_TESTNET;
     } else {
       this.network = bitcoin.networks.bitcoin
       this.store.host = OPENAPI_URL_MAINNET;
       this.store.walletAPIHost = WALLETAPI_URL_MAINNET;
+      this.store.ordAPIHost = ORDAPI_URL_MAINNET;
     }
   }
 
@@ -85,6 +93,10 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
 
   getWalletAPIHost() {
     return this.store.walletAPIHost;
+  }
+
+  getOrdAPIHost() {
+    return this.store.ordAPIHost;
   }
 
   getNetwork(): bitcoin.Network {
@@ -188,17 +200,14 @@ export class UnisatOpenApi implements IUniSatOpenAPI {
     return this.getRespData(res);
   };
 
-  async loadContent(uri: string): Promise<ArrayBuffer> {
-    const headers = new Headers();
-    headers.append('X-Client', 'UniSat Wallet');
-    headers.append('X-Version', VERSION);
-    headers.append('x-address', this.clientAddress);
-    headers.append('x-flag', this.addressFlag + '');
-    headers.append('x-channel', CHANNEL);
-    headers.append('x-udid', this.store.deviceId);
+  async loadContent(inscriptionid: string): Promise<ArrayBuffer> {
+    const host = this.getOrdAPIHost()
+    const uri = `${host}/content/${inscriptionid}`
+    console.log('load content uri:', uri)
+
     let res: Response;
     try {
-      res = await fetch(new Request(uri), { method: 'GET', headers, mode: 'cors', cache: 'default' });
+      res = await fetch(new Request(uri), { method: 'GET', mode: 'cors', cache: 'default' });
     } catch (e: any) {
       throw new Error('Network error: ' + e && e.message);
     }

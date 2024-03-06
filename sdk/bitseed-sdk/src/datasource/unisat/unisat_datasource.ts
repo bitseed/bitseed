@@ -63,14 +63,19 @@ export class UniSatDataSource implements IDatasource {
     }
 
     const inscription = utxoDetail.inscriptions[0]
-    const content = await this.unisatOpenAPI.loadContent(inscription.content)
-    const base64Content = toB64(new Uint8Array(content))
+
+    let base64Content = ""
+    if (inscription.contentType && inscription.content) {
+      const content = await this.unisatOpenAPI.loadContent(inscription.inscriptionId)
+      base64Content = toB64(new Uint8Array(content))
+    }
 
     let meta = {}
-    if (decodeMetadata ) {
+    if (decodeMetadata) {
       if (utxoDetail && utxoDetail.inscriptions.length >= 2) {
         const metaInscription = utxoDetail.inscriptions[1]
-        const metaBody = await this.unisatOpenAPI.loadContent(metaInscription.content)
+        console.log("decode meta inscription:", metaInscription)
+        const metaBody = await this.unisatOpenAPI.loadContent(metaInscription.inscriptionId)
 
         try {
           const decoder = new TextDecoder('utf-8');
@@ -78,7 +83,6 @@ export class UniSatDataSource implements IDatasource {
           meta = JSON.parse(decodedString)
         } catch(e: any) {
           console.log("decode meta error:", e)
-
           throw new BitseedSDKError('decode meta error', {
             cause: e,
           })

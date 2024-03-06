@@ -31,6 +31,13 @@ export default function MintStory() {
       let tick = parseInscriptionID(tickDeployInscriptionID)
       const mintOptions: InscribeOptions = {
         fee_rate: 1,
+        satpoint: {
+          outpoint: {
+            txid: '42d186a5d9bc064e5704024afb2dfccd424da1b9756ae31a4fbfee22f4fc7ec5',
+            vout: 0
+          },
+          offset: 0
+        }
       }
 
       const inscriptionId = await bitseed.mint(tick, userInput, mintOptions)

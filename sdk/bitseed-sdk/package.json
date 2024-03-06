@@ -12,7 +12,7 @@
     "build": "tsup",
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "jest src",
-    "test:unit:debug": "jest src/datasource/unisat/unisat_datasource.test.ts",
+    "test:unit:debug": "jest src/bitseed.test.ts",
     "test:e2e": "npm run build && playwright test -c playwright-ct.config.ts",
     "test:e2e:debug": "npm run build && playwright test -c playwright-ct.config.ts --ui",
     "prettier:check": "prettier -c --ignore-unknown .",
@@ -64,6 +64,7 @@
     "cbor": "^9.0.2",
     "commander": "^10.0.0",
     "decimal.js": "^10.4.3",
+    "js-sha3": "^0.9.3",
     "randomstring": "^1.2.3"
   }
 }
