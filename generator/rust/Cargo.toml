@@ -1,0 +1,22 @@
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+lto = true
+opt-level = 'z'
+
+[dependencies]
+minicbor = "0.21.0"
+
+[dependencies.wasm-bindgen]
+version = "0.2"
+optional = true
+default-features = false
+
+[profile.dev]
+panic = "abort"
