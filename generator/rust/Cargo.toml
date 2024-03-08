@@ -1,22 +1,20 @@
 [package]
-name = "rust"
+name = "generator"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+wee_alloc = "0.4.5"
+wasm-bindgen = "0.2"
+minicbor = { version = "0.19.0", default-features = false }
 
 [lib]
 crate-type = ["cdylib"]
 
 [profile.release]
+opt-level = "z"
 lto = true
-opt-level = 'z'
 
-[dependencies]
-minicbor = "0.21.0"
-
-[dependencies.wasm-bindgen]
-version = "0.2"
-optional = true
-default-features = false
-
-[profile.dev]
-panic = "abort"
+[features]
+default = ["std"]
+std = []

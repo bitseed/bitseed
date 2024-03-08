@@ -1,53 +1,91 @@
-#![no_std]
-#![no_main]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-use alloc::vec::Vec;
-use minicbor::{Decoder, Encoder, Decode, Encode};
+#[cfg(feature = "std")]
+extern crate std;
+
+extern crate wee_alloc;
+
+use minicbor::{Decode, Encode};
+
+struct InputData {
+    left: usize,
+    right: usize,
+}
+
+impl<C> Encode<C> for InputData {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.array(2)?;
+        e.u64(self.left as u64)?;
+        e.u64(self.right as u64)?;
+        Ok(())
+    }
+}
+
+impl<'b, C> Decode<'b, C> for InputData {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        let array_len = d.array()?;
+        if array_len != Some(2) {
+            return Err(minicbor::decode::Error::message("Invalid array length"));
+        }
+        let left = d.u64()? as usize;
+        let right = d.u64()? as usize;
+        Ok(InputData { left, right })
+    }
+}
+
+struct OutputData {
+    sum: usize,
+}
+
+impl<C> Encode<C> for OutputData {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        e.u64(self.sum as u64)?;
+        Ok(())
+    }
+}
+
+impl<'b, C> Decode<'b, C> for OutputData {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        let sum = d.u64()? as usize;
+        Ok(OutputData { sum })
+    }
+}
+
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-// 假设你有一个输入和输出的结构体，你需要根据你的应用程序适当定义它们
-#[derive(Encode, Decode)]
-struct InputData {
-    #[n(0)] left: usize,
-    #[n(1)] right: usize,
-}
+static mut OUTPUT_BUFFER: [u8; 16] = [0; 16];
 
-#[derive(Encode, Decode)]
-struct OutputData {
-    #[n(0)] sum: usize,
-}
+#[no_mangle]
+pub extern "C" fn inscribe_generate(input: &[u8]) -> &'static [u8] {
+    let mut decoder = minicbor::Decoder::new(input);
+    let input_data = InputData::decode(&mut decoder, &mut ()).unwrap();
 
-fn process_input_data(input_data: InputData) -> OutputData {
-    let sum = input_data.left + input_data.right;
-
-    OutputData { sum }
-}
-
-// 由于我们在 no_std 环境中，我们不能使用 wasm_bindgen，但是我们可以定义一个类似的接口
-// 如果你需要在 wasm 环境中使用它，你需要确保你的构建环境支持 alloc
-pub fn inscribe_generate(input: Vec<u8>) -> Vec<u8> {
-    // 创建一个解码器
-    let mut dec = Decoder::new(&input);
-    // 尝试从 CBOR 编码的输入解码
-    let input_data: InputData = match dec.decode() {
-        Ok(data) => data,
-        Err(e) => {
-            // 处理解码错误，例如返回错误编码的 CBOR 或 panic
-            panic!("Failed to decode input: {:?}", e);
-        }
+    let output_data = OutputData {
+        sum: input_data.left + input_data.right,
     };
 
-    // 执行你的业务逻辑...
-    let output_data = process_input_data(input_data);
-
-    // 创建一个编码器
-    let mut enc = Encoder::new(Vec::new());
-    // 将输出数据编码为 CBOR
-    enc.encode(&output_data).expect("Failed to encode output");
-    // 获取编码后的数据
-    enc.into_inner()
+    unsafe {
+        minicbor::encode(&output_data, OUTPUT_BUFFER.as_mut()).unwrap();
+        &OUTPUT_BUFFER
+    }
 }
