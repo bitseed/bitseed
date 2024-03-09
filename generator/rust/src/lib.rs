@@ -7,9 +7,32 @@ extern crate wee_alloc;
 
 use minicbor::{Decode, Encode};
 
+pub struct OutPoint {
+    pub txid: String
+    pub index: u64
+}
+
+pub struct InscribeSeed {
+    pub block_hash: String,
+    pub utxo: OutPoint,
+}
+
 struct InputData {
-    left: usize,
-    right: usize,
+    pub deploy_args: Vec<String>, 
+    pub seed: InscribeSeed, 
+    pub recipient: String, 
+    pub user_input: Option<String>
+}
+
+struct Content {
+    pub content_type: String,
+    pub content: Vec<u8>,
+}
+
+struct OutputData {
+    pub amount: u64,
+    pub attributes: Option<minicbor::Value>,
+    pub content: Option<Content>,
 }
 
 impl<C> Encode<C> for InputData {
@@ -40,9 +63,7 @@ impl<'b, C> Decode<'b, C> for InputData {
     }
 }
 
-struct OutputData {
-    sum: usize,
-}
+
 
 impl<C> Encode<C> for OutputData {
     fn encode<W: minicbor::encode::Write>(

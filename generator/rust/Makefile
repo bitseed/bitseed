@@ -11,6 +11,7 @@ install-deps:
 	@echo "Installing dependencies..."
 	@rustup target add $(WASM_TARGET)
 	@cargo install wasm-pack
+	@cargo install wasm-snip
 # The following line assumes you have binaryen installed or available in your package manager
 # For example, on Ubuntu you might use: sudo apt-get install binaryen
 # On macOS with Homebrew: brew install binaryen
@@ -21,6 +22,7 @@ build:
 	@echo "Building WASM module..."
 	@wasm-pack build --release --no-default-features
 	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
+	@wasm-snip --snip-rust-fmt-code --snip-rust-panicking-code --skip-producers-section pkg/$(PROJECT_NAME)_bg.wasm -o pkg/$(PROJECT_NAME)_bg.wasm
 
 clean:
 	@echo "Cleaning up..."
