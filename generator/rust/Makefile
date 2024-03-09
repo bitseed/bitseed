@@ -3,9 +3,9 @@ SHELL := /bin/bash
 PROJECT_NAME := generator
 WASM_TARGET := wasm32-unknown-unknown
 
-.PHONY: all clean build install-deps
+.PHONY: all clean test build install-deps
 
-all: build
+all: clean build
 
 install-deps:
 	@echo "Installing dependencies..."
@@ -20,9 +20,12 @@ install-deps:
 
 build:
 	@echo "Building WASM module..."
-	@wasm-pack build --release --no-default-features
+	@wasm-pack build --release
 	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
 	@wasm-snip --snip-rust-fmt-code --snip-rust-panicking-code --skip-producers-section pkg/$(PROJECT_NAME)_bg.wasm -o pkg/$(PROJECT_NAME)_bg.wasm
+
+test: build
+	yarn test
 
 clean:
 	@echo "Cleaning up..."

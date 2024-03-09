@@ -16,5 +16,6 @@ opt-level = "z"
 lto = true
 
 [features]
-default = ["std"]
+default = ["debug"]
 std = []
+debug = []
