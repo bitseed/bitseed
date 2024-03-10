@@ -67,3 +67,21 @@ impl<'a, C> Encode<C> for OutputData<'a> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const MAX_ENCODED_INPUT_SIZE: usize = 1024;
+
+    #[test]
+    fn test_input_data_decode() {
+        let input = [b'a', b'r', b'g', b'1', 0, 0, 0, 0, 0, 0];
+
+        let decoded_input = minicbor::decode::<InputData>(&input).unwrap();
+
+        assert_eq!(decoded_input.deploy_args.len(), 1);
+        assert_eq!(decoded_input.seed, "test");
+        assert_eq!(decoded_input.user_input, "test");
+    }
+}

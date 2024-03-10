@@ -3,7 +3,7 @@ SHELL := /bin/bash
 PROJECT_NAME := generator
 WASM_TARGET := wasm32-unknown-unknown
 
-.PHONY: all clean test build install-deps
+.PHONY: all clean unit-test e2e-test test build install-deps
 
 all: clean build
 
@@ -24,8 +24,13 @@ build:
 	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
 	@wasm-snip --snip-rust-fmt-code --snip-rust-panicking-code --skip-producers-section pkg/$(PROJECT_NAME)_bg.wasm -o pkg/$(PROJECT_NAME)_bg.wasm
 
-test: build
+unit-test: build
+	@wasm-pack test --node
+
+e2e-test: build
 	yarn test
+
+test: unit-test e2e-test
 
 clean:
 	@echo "Cleaning up..."

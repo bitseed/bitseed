@@ -22,7 +22,7 @@ pub fn console_log(message: &str) {
     }
 }
 
-#[cfg_attr(not(feature = "std"), panic_handler)]
+#[cfg_attr(not(any(feature = "std", test)), panic_handler)]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     console_log("Panic occurred!");
 
