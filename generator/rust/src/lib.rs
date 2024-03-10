@@ -1,7 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), no_main)]
 
-use minicbor::{Decode, Encode};
+mod constants;
+mod types;
 
 #[cfg(feature = "debug")]
 mod debug;
@@ -9,114 +10,14 @@ mod debug;
 #[cfg(feature = "debug")]
 use debug::*;
 
+
 #[cfg_attr(not(any(feature = "std", feature = "debug")), panic_handler)]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
-const MAX_DEPLOY_ARGS: usize = 10;
-const MAX_CONTENT_SIZE: usize = 1024;
-const MAX_STRING_LEN: usize = 64;
-
-struct InputData {
-    pub deploy_args: [[u8; MAX_STRING_LEN]; MAX_DEPLOY_ARGS],
-    pub seed: [u8; MAX_STRING_LEN],
-    pub user_input: Option<[u8; MAX_STRING_LEN]>,
-}
-
-impl<'b, C> Decode<'b, C> for InputData {
-    fn decode(d: &mut minicbor::Decoder<'b>, _ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let mut deploy_args = [[0; MAX_STRING_LEN]; MAX_DEPLOY_ARGS];
-        let mut seed = [0; MAX_STRING_LEN];
-        let mut user_input = None;
-
-        let mut map_decoder = d.map_iter::<&str, minicbor::data::Type>()?;
-
-        while let Some(item) = map_decoder.next() {
-            let (key, value) = item?;
-            match key {
-                "deploy_args" => {
-                    let mut args_decoder = minicbor::Decoder::new(value.as_bytes()?);
-                    for i in 0..MAX_DEPLOY_ARGS {
-                        if let Some(s) = args_decoder.str()? {
-                            deploy_args[i][..s.len()].copy_from_slice(s.as_bytes());
-                        } else {
-                            break;
-                        }
-                    }
-                }
-                "seed" => {
-                    if let minicbor::data::Type::String = value {
-                        let s = d.str()?;
-                        seed[..s.len()].copy_from_slice(s.as_bytes());
-                    }
-                }
-                "user_input" => {
-                    if let minicbor::data::Type::String = value {
-                        let s = d.str()?;
-                        let mut input = [0; MAX_STRING_LEN];
-                        input[..s.len()].copy_from_slice(s.as_bytes());
-                        user_input = Some(input);
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        Ok(InputData {
-            deploy_args,
-            seed,
-            user_input,
-        })
-    }
-}
-
-struct Content<'a> {
-    pub content_type: &'a str,
-    pub content: [u8; MAX_CONTENT_SIZE],
-    pub content_len: usize,
-}
-
-impl<'a, C> Encode<C> for Content<'a> {
-    fn encode<W: minicbor::encode::Write>(
-        &self,
-        e: &mut minicbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.array(2)?;
-        e.str(self.content_type)?;
-        e.bytes(&self.content[..self.content_len])?;
-        Ok(())
-    }
-}
-
-struct OutputData<'a> {
-    pub amount: u64,
-    pub attributes: Option<&'a [u8]>,
-    pub content: Option<Content<'a>>,
-}
-
-impl<'a, C> Encode<C> for OutputData<'a> {
-    fn encode<W: minicbor::encode::Write>(
-        &self,
-        e: &mut minicbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.array(3)?;
-        e.u64(self.amount)?;
-        if let Some(attributes) = self.attributes {
-            e.bytes(attributes)?;
-        } else {
-            e.null()?;
-        }
-        if let Some(content) = &self.content {
-            content.encode(e, _ctx)?;
-        } else {
-            e.null()?;
-        }
-        Ok(())
-    }
-}
+use constants::MAX_CONTENT_SIZE;
+use types::{ InputData, OutputData, Content };
 
 static mut OUTPUT_BUFFER: [u8; 16] = [0; 16];
 
