@@ -1,5 +1,5 @@
 // src/debug.rs
-use core::fmt::{self, Write};
+use core::fmt::{self, Write, Arguments};
 
 pub struct Console;
 
@@ -16,15 +16,21 @@ extern "C" {
     pub fn js_log(ptr: *const u8, len: usize);
 }
 
-pub fn console_log(message: &str) {
-    unsafe {
-        js_log(message.as_ptr(), message.len());
-    }
+pub fn console_log(args: Arguments) {
+    let mut console = Console;
+    fmt::write(&mut console, args).unwrap();
+}
+
+#[macro_export]
+macro_rules! log {
+    ($($arg:tt)*) => ({
+        $crate::debug::console_log(format_args!($($arg)*));
+    })
 }
 
 #[cfg_attr(not(any(feature = "std", test)), panic_handler)]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    console_log("Panic occurred!");
+    log!("Panic occurred!");
 
     let mut console = Console;
     writeln!(console, "{}", info).unwrap();

@@ -19,6 +19,8 @@ const { inscribe_generate, memory } = wasmInstance.exports;
 // 编码输入数据并复制到 WebAssembly 内存中
 function encodeInput(input) {
   const encodedData = cbor.encode(input);
+  console.log('encodedInputData:', JSON.stringify(Array.from(encodedData)))
+
   const len = encodedData.length;
   const ptr = memory.buffer.byteLength;
   memory.grow(Math.ceil(len / 65536));
@@ -37,11 +39,21 @@ function decodeOutput(ptr, len) {
 // 测试 inscribe_generate 函数
 describe('inscribe_generate', () => {
   test('generates correct output for valid input', () => {
+    const deployArgs = [
+      '{"level1":{"type":"range","data":{"min":1,"max":1000}}}', 
+      '{"level2":{"type":"range","data":{"min":1,"max":1000}}}',
+    ]
+
+    const argsBytes = new Uint8Array(cbor.encodeOne(deployArgs.map((json)=>JSON.parse(json))))
+    const argsArray = Array.from(argsBytes)
+    console.log('argsArray:', JSON.stringify(argsArray))
+
     const input = {
-      deploy_args: ['arg1', 'arg2'],
+      attrs: argsArray,
       seed: 'random-seed',
       user_input: 'user-input',
     };
+
     console.log('input:', input)
 
     const [inputPtr, inputLen] = encodeInput(input);
