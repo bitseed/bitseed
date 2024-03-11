@@ -27,10 +27,8 @@ impl<'a, C> Decode<'a, C> for DeployArgs {
   fn decode(d: &mut Decoder<'a>, _ctx: &mut C) -> Result<Self, Error> {
       let mut args = Vec::new();
 
-      // 读取数组的长度
       let len = d.array()?.unwrap_or(0);
 
-      // 读取数组的元素
       for _ in 0..len {
           let arg = DeployArg::decode(d, _ctx)?;
           args.push(arg).map_err(|_| Error::message("Too many arguments"))?;
@@ -48,20 +46,14 @@ impl<'a, C> Decode<'a, C> for DeployArg {
           data: ArgData { min: 0, max: 0 },
       };
 
-      // 读取 map 的长度
       let len = d.map()?.unwrap_or(0);
 
-      // 读取 map 的键值对
       for _ in 0..len {
-          // 读取键(应该是字符串类型)
           let key = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?;
 
-          // 根据键读取相应的值并填充到 DeployArg 对象中
           match key.as_str() {
               _ => {
-                  // 将键作为 name 字段的值
                   name = key;
-                  // 读取值作为 ArgType
                   arg = Arg::decode(d, _ctx)?;
               }
           }
@@ -76,20 +68,15 @@ impl<'a, C> Decode<'a, C> for Arg {
       let mut type_name = String::new();
       let mut data = ArgData { min: 0, max: 0 };
 
-      // 读取 map 的长度
       let len = d.map()?.unwrap_or(0);
 
-      // 读取 map 的键值对
       for _ in 0..len {
-          // 读取键(应该是字符串类型)
           let key = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?;
 
-          // 根据键读取相应的值并填充到 ArgType 对象中
           match key.as_str() {
               "type" => type_name = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?,
               "data" => data = ArgData::decode(d, _ctx)?,
               _ => {
-                  // 跳过未知的键
                   d.skip()?;
               }
           }
@@ -104,20 +91,15 @@ impl<'a, C> Decode<'a, C> for ArgData {
       let mut min = 0;
       let mut max = 0;
 
-      // 读取 map 的长度
       let len = d.map()?.unwrap_or(0);
 
-      // 读取 map 的键值对
       for _ in 0..len {
-          // 读取键(应该是字符串类型)
           let key = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?;
 
-          // 根据键读取相应的值并填充到 ArgData 对象中
           match key.as_str() {
               "min" => min = d.u64()?,
               "max" => max = d.u64()?,
               _ => {
-                  // 跳过未知的键
                   d.skip()?;
               }
           }
@@ -139,18 +121,13 @@ impl<'a, C> Decode<'a, C> for InputData {
       let mut seed = String::new();
       let mut user_input = String::new();
 
-      // 读取 map 的长度
       let len = d.map()?.unwrap_or(0);
 
-      // 读取 map 的键值对
       for _ in 0..len {
-          // 读取键(应该是字符串类型)
           let key = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?;
 
-          // 根据键读取相应的值并填充到 InputData 对象中
           match key.as_str() {
               "attrs" => {
-                  // 读取 deploy_args 字节数组
                   let array_len = d.array()?.unwrap_or(0);
                   for _ in 0..array_len {
                       let b = d.u32()?;
@@ -160,7 +137,6 @@ impl<'a, C> Decode<'a, C> for InputData {
               "seed" => seed = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?,
               "user_input" => user_input = String::<MAX_STRING_LEN>::try_from(d.str()?).map_err(|_| Error::message("Invalid string length"))?,
               _ => {
-                  // 跳过未知的键
                   d.skip()?;
               }
           }

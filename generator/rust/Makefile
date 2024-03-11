@@ -3,7 +3,7 @@ SHELL := /bin/bash
 PROJECT_NAME := generator
 WASM_TARGET := wasm32-unknown-unknown
 
-.PHONY: all clean unit-test e2e-test test build install-deps
+.PHONY: all clean unit-test e2e-test test build release install-deps
 
 all: clean build
 
@@ -19,6 +19,12 @@ install-deps:
 # sudo apt-get install binaryen
 
 build:
+	@echo "Building WASM module..."
+	@wasm-pack build --release --features debug
+	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
+	@wasm-snip --snip-rust-fmt-code --snip-rust-panicking-code --skip-producers-section pkg/$(PROJECT_NAME)_bg.wasm -o pkg/$(PROJECT_NAME)_bg.wasm
+
+release:
 	@echo "Building WASM module..."
 	@wasm-pack build --release --no-default-features
 	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
