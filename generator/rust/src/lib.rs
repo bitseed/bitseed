@@ -61,7 +61,7 @@ pub extern "C" fn inscribe_generate(buffer: *const u8) -> *const u8 {
     let buffer_length = get_data_length(buffer);
 
     #[cfg(feature = "debug")]
-    printf!("buffer_length: {}", buffer_length);
+    printf!("input_buffer length: {}", buffer_length);
 
     let input_buffer_slice = unsafe { slice::from_raw_parts(buffer.add(4), buffer_length as usize) };
     let output_buffer = inscribe_generate_rust(input_buffer_slice);
