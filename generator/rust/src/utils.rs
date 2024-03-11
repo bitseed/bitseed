@@ -24,6 +24,10 @@ impl<const N: usize> Buffer<N> {
         }
     }
 
+    pub fn extend_from_slice(&mut self, other: &[u8]) -> Result<(), ()> {
+        self.inner.extend_from_slice(other)
+    }
+
     pub fn as_slice(&self) -> &[u8] {
         self.inner.as_slice()
     }

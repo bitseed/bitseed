@@ -18,7 +18,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 }
 
 use core::slice;
-use core::ptr;
 use constants::{MAX_CONTENT_SIZE, MAX_STRING_LEN, MAX_DEPLOY_ARGS};
 use heapless::{LinearMap, String, Vec};
 use types::{Content, DeployArgs, InputData, OutputData, Value};
@@ -54,7 +53,58 @@ fn int_to_bytes(n: u32) -> [u8; 4] {
     bytes
 }
 
-static mut OUTPUT_BUFFER: [u8; MAX_CONTENT_SIZE] = [0; MAX_CONTENT_SIZE];
+pub fn inscribe_generate_rust(input: &[u8]) -> Buffer<MAX_CONTENT_SIZE> {
+    #[cfg(feature = "debug")]
+    printf!("inscribe_generate_start, input size: {}", input.len());
+
+    let input_data = minicbor::decode::<InputData>(input).unwrap();
+
+    #[cfg(feature = "debug")]
+    printf!("input_data seed: {}", input_data.seed.as_str());
+
+    #[cfg(feature = "debug")]
+    printf!("input_data user_input: {}", input_data.user_input.as_str());
+
+    let mut seed = String::<MAX_CONTENT_SIZE>::new();
+    seed.push_str(input_data.seed.as_str()).unwrap();
+    seed.push_str(input_data.user_input.as_str()).unwrap();
+    let hash_value = hash_str_uint32(seed.as_str());
+
+    let deploy_args: DeployArgs =
+        minicbor::decode::<DeployArgs>(input_data.deploy_args.as_slice()).unwrap();
+
+    let mut json_output = deploy_args.args
+        .into_iter()
+        .filter(|arg| arg.arg.type_name == "range")
+        .map(|arg| {
+            let range_min = arg.arg.data.min;
+            let range_max = arg.arg.data.max;
+            let random_value = range_min + (hash_value as u64 % (range_max - range_min + 1));
+            (arg.name, Value::UInt(random_value))
+        })
+        .collect::<LinearMap<_, _, MAX_DEPLOY_ARGS>>();
+
+    let _ = json_output.insert(
+        String::try_from("id").unwrap(),
+        Value::String(input_data.user_input.clone()),
+    );
+
+    let mut content: Vec<u8, MAX_CONTENT_SIZE> = Vec::new();
+    content.extend_from_slice("hello world!".as_bytes()).unwrap();
+
+    let output_data = OutputData {
+        amount: 1,
+        attributes: Some(json_output),
+        content: Some(Content {
+            content_type: String::<MAX_STRING_LEN>::try_from("text/plain").unwrap(),
+            content: content,
+        }),
+    };
+
+    let mut buf = Buffer::<MAX_CONTENT_SIZE>::new();
+    minicbor::encode(&output_data, &mut buf).unwrap();
+    buf
+}
 
 #[no_mangle]
 pub extern "C" fn inscribe_generate(buffer: *const u8) -> *const u8 {
@@ -71,63 +121,24 @@ pub extern "C" fn inscribe_generate(buffer: *const u8) -> *const u8 {
 
     let length_bytes = int_to_bytes(output_buffer.len() as u32);
 
-    unsafe {
-        let output_ptr = OUTPUT_BUFFER.as_mut_ptr();
-        ptr::copy_nonoverlapping(length_bytes.as_ptr(), output_ptr, 4);
-        ptr::copy_nonoverlapping(output_buffer.as_slice().as_ptr(), output_ptr.add(4), output_buffer.len());
-        OUTPUT_BUFFER.as_ptr()
-    }
+    let mut result_buffer = Buffer::<{ MAX_CONTENT_SIZE + 4 }>::new();
+    result_buffer.extend_from_slice(&length_bytes).unwrap();
+    result_buffer.extend_from_slice(&output_buffer.as_slice()).unwrap();
+    result_buffer.as_slice().as_ptr()
 }
 
-pub fn inscribe_generate_rust(input: &[u8]) -> Buffer<MAX_CONTENT_SIZE> {
-    #[cfg(feature = "debug")]
-    printf!("inscribe_generate_start, input size: {}", input.len());
+#[no_mangle]
+pub extern "C" fn inscribe_verify(buffer: *const u8, inscribe_output_buffer: *const u8) -> bool {
+    let inscribe_output = inscribe_generate(buffer);
+    let output_len = get_data_length(inscribe_output);
 
-    let input_data = minicbor::decode::<InputData>(input).unwrap();
+    let inscribe_output_slice = unsafe { slice::from_raw_parts(inscribe_output.add(4), output_len as usize) };
+    let inscribe_output_buffer_slice = unsafe { slice::from_raw_parts(inscribe_output_buffer, output_len as usize) };
 
-    #[cfg(feature = "debug")]
-    printf!("input_data seed: {}", input_data.seed.as_str());
+    inscribe_output_slice == inscribe_output_buffer_slice
+}
 
-    #[cfg(feature = "debug")]
-    printf!("input_data user_input: {}", input_data.user_input.as_str());
-
-    let mut json_output = LinearMap::<String<MAX_STRING_LEN>, Value, MAX_DEPLOY_ARGS>::new();
-
-    let mut seed = String::<MAX_CONTENT_SIZE>::new();
-    seed.push_str(input_data.seed.as_str()).unwrap();
-    seed.push_str(input_data.user_input.as_str()).unwrap();
-    let hash_value = hash_str_uint32(seed.as_str());
-
-    let deploy_args: DeployArgs =
-        minicbor::decode::<DeployArgs>(input_data.deploy_args.as_slice()).unwrap();
-
-    for arg in deploy_args.args {
-        if arg.arg.type_name == "range" {
-            let range_min = arg.arg.data.min;
-            let range_max = arg.arg.data.max;
-            let random_value = range_min + (hash_value as u64 % (range_max - range_min + 1));
-            let _ = json_output.insert(arg.name.clone(), Value::UInt(random_value));
-        }
-    }
-
-    let _ = json_output.insert(
-        String::try_from("id").unwrap(),
-        Value::String(input_data.user_input.clone()),
-    );
-
-    let mut content: Vec<u8, MAX_CONTENT_SIZE> = Vec::new();
-    content.extend_from_slice("hello world!".as_bytes()).unwrap();
-
-    let output_data = OutputData {
-        amount: 1,
-        attributes: Some(json_output),
-        content: Some(Content {
-            content_type: String::try_from("text/plain").unwrap(),
-            content: content,
-        }),
-    };
-
-    let mut buf = Buffer::<MAX_CONTENT_SIZE>::new();
-    minicbor::encode(&output_data, &mut buf).unwrap();
-    buf
+#[no_mangle]
+pub extern "C" fn indexer_generate(buffer: *const u8) -> *const u8 {
+    inscribe_generate(buffer)
 }
