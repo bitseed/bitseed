@@ -20,7 +20,7 @@ install-deps:
 
 build:
 	@echo "Building WASM module..."
-	@wasm-pack build --release --features debug
+	@wasm-pack build --release --no-default-features
 	@wasm-opt -Os -o pkg/$(PROJECT_NAME)_bg.wasm pkg/$(PROJECT_NAME)_bg.wasm
 	@wasm-snip --snip-rust-fmt-code --snip-rust-panicking-code --skip-producers-section pkg/$(PROJECT_NAME)_bg.wasm -o pkg/$(PROJECT_NAME)_bg.wasm
 

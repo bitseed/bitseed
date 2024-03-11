@@ -3,6 +3,7 @@
 
 mod constants;
 mod types;
+mod stack_alloc;
 
 #[cfg(feature = "debug")]
 mod debug;
@@ -15,6 +16,8 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+use core::slice;
+use core::ptr;
 use constants::{MAX_CONTENT_SIZE, MAX_STRING_LEN, MAX_DEPLOY_ARGS};
 use heapless::{LinearMap, String, Vec};
 use types::{Content, DeployArgs, InputData, OutputData, Value};
@@ -32,18 +35,59 @@ fn hash_str_uint32(input: &str) -> u32 {
     hash
 }
 
+fn get_data_length(buffer: *const u8) -> u32 {
+    unsafe {
+        let length_bytes = slice::from_raw_parts(buffer, 4);
+        u32::from_be_bytes([length_bytes[0], length_bytes[1], length_bytes[2], length_bytes[3]])
+    }
+}
+
+fn int_to_bytes(n: u32) -> [u8; 4] {
+    let bytes = [
+        ((n >> 24) & 0xFF) as u8,
+        ((n >> 16) & 0xFF) as u8,
+        ((n >> 8) & 0xFF) as u8,
+        (n & 0xFF) as u8,
+    ];
+    bytes
+}
+
+static mut OUTPUT_BUFFER: [u8; MAX_CONTENT_SIZE] = [0; MAX_CONTENT_SIZE];
+
 #[no_mangle]
-pub extern "C" fn inscribe_generate(input: &[u8]) -> &'static [u8] {
+pub extern "C" fn inscribe_generate(buffer: *const u8) -> *const u8 {
+    let buffer_length = get_data_length(buffer);
+
     #[cfg(feature = "debug")]
-    log!("inscribe_generate_start, input size: {}", input.len());
+    printf!("buffer_length: {}", buffer_length);
+
+    let input_buffer_slice = unsafe { slice::from_raw_parts(buffer.add(4), buffer_length as usize) };
+    let output_buffer = inscribe_generate_rust(input_buffer_slice);
+
+    #[cfg(feature = "debug")]
+    printf!("output_buffer length: {}", output_buffer.len());
+
+    let length_bytes = int_to_bytes(output_buffer.len() as u32);
+
+    unsafe {
+        let output_ptr = OUTPUT_BUFFER.as_mut_ptr();
+        ptr::copy_nonoverlapping(length_bytes.as_ptr(), output_ptr, 4);
+        ptr::copy_nonoverlapping(output_buffer.as_ptr(), output_ptr.add(4), output_buffer.len());
+        OUTPUT_BUFFER.as_ptr()
+    }
+}
+
+pub fn inscribe_generate_rust(input: &[u8]) -> &'static [u8] {
+    #[cfg(feature = "debug")]
+    printf!("inscribe_generate_start, input size: {}", input.len());
 
     let input_data = minicbor::decode::<InputData>(input).unwrap();
 
     #[cfg(feature = "debug")]
-    log!("input_data seed: {}", input_data.seed.as_str());
+    printf!("input_data seed: {}", input_data.seed.as_str());
 
     #[cfg(feature = "debug")]
-    log!("input_data user_input: {}", input_data.user_input.as_str());
+    printf!("input_data user_input: {}", input_data.user_input.as_str());
 
     let mut json_output = LinearMap::<String<MAX_STRING_LEN>, Value, MAX_DEPLOY_ARGS>::new();
 
@@ -81,7 +125,7 @@ pub extern "C" fn inscribe_generate(input: &[u8]) -> &'static [u8] {
     static mut OUTPUT_BUFFER: [u8; MAX_CONTENT_SIZE] = [0; MAX_CONTENT_SIZE];
 
     unsafe {
-        minicbor::encode(&output_data, &mut OUTPUT_BUFFER[..]).unwrap();
-        &OUTPUT_BUFFER[..minicbor::decode::<u32>(&OUTPUT_BUFFER[..4]).unwrap() as usize + 4]
+        minicbor::encode(&output_data, &mut OUTPUT_BUFFER.as_mut()).unwrap();
+        OUTPUT_BUFFER.as_slice()
     }
 }

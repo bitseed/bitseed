@@ -22,7 +22,7 @@ pub fn console_log(args: Arguments) {
 }
 
 #[macro_export]
-macro_rules! log {
+macro_rules! printf {
     ($($arg:tt)*) => ({
         $crate::debug::console_log(format_args!($($arg)*));
     })
@@ -30,7 +30,7 @@ macro_rules! log {
 
 #[cfg_attr(not(any(feature = "std", test)), panic_handler)]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    log!("Panic occurred!");
+    printf!("Panic occurred!");
 
     let mut console = Console;
     writeln!(console, "{}", info).unwrap();
