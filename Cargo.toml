@@ -25,3 +25,6 @@ ord = { version = "0.15.0", git = "https://github.com/bitseed/ord", rev = "8d8d1
 ordinals = { version = "0.0.2", git = "https://github.com/bitseed/ord", rev = "8d8d1979b6e548083b0902d40c64f68a53724faa"}
 wasmer = "4.2.5"
 once_cell = "1.19.0"
+
+[dev-dependencies]
+testcontainers = { version = "0.15.0" }

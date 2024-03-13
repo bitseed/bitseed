@@ -1,3 +1,5 @@
+use crate::inscription;
+
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
@@ -97,7 +99,7 @@ pub struct InscribeOutput {
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
-    inscription: Option<Inscription>,
+    inscriptions: Vec<Inscription>,
     satpoint: SatPoint,
     destination: Address,
 }
@@ -126,7 +128,7 @@ impl Inscriber {
         Ok(Self {
             wallet,
             option,
-            inscription: None,
+            inscriptions: Vec::new(),
             satpoint,
             destination,
         })
@@ -212,13 +214,25 @@ impl Inscriber {
         self.with_operation(Operation::Mint(mint_record))
     }
 
-    fn with_operation(mut self, operation: Operation) -> Result<Self> {
-        let inscription = operation.to_inscription();
-        self.inscription = Some(inscription);
+    pub fn with_split(mut self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
         Ok(self)
     }
 
-    pub fn inscribe(self) -> Result<InscribeOutput> {
+    fn with_operation(mut self, operation: Operation) -> Result<Self> {
+        let inscription = operation.to_inscription();
+        self.inscriptions.push(inscription);
+        Ok(self)
+    }
+
+    pub fn inscribe(&self) -> Result<Vec<InscribeOutput>> {
+        let outputs: Result<Vec<InscribeOutput>, _> = self.inscriptions.iter().map(|inscription| {
+            self.inscribe_inner(inscription)
+        }).collect();
+
+        outputs
+    }
+
+    fn inscribe_inner(&self, inscription: &Inscription) -> Result<InscribeOutput> {
         let mut utxos = self.wallet.get_unspent_outputs()?;
         let locked_utxos = self.wallet.get_locked_outputs()?;
         let runic_utxos = self.wallet.get_runic_outputs()?;
@@ -229,11 +243,8 @@ impl Inscriber {
         ];
         let wallet_inscriptions = self.wallet.get_inscriptions()?;
 
-        let destination = self.destination;
+        let destination = self.destination.clone();
         let satpoint = self.satpoint;
-        let inscription = self
-            .inscription
-            .ok_or_else(|| anyhow!("inscription not set"))?;
 
         let secp256k1 = Secp256k1::new();
         let key_pair = UntweakedKeyPair::new(&secp256k1, &mut rand::thread_rng());
@@ -426,7 +437,7 @@ impl Inscriber {
                 commit_tx: commit_tx.txid(),
                 reveal_tx: reveal_tx.txid(),
                 total_fees: total_fees,
-                inscription: InscriptionOrId::Inscription(inscription),
+                inscription: InscriptionOrId::Inscription(inscription.clone()),
             });
         }
 
