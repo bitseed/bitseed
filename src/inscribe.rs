@@ -225,9 +225,11 @@ impl Inscriber {
     }
 
     pub fn inscribe(&self) -> Result<Vec<InscribeOutput>> {
-        let outputs: Result<Vec<InscribeOutput>, _> = self.inscriptions.iter().map(|inscription| {
-            self.inscribe_inner(inscription)
-        }).collect();
+        let outputs: Result<Vec<InscribeOutput>, _> = self
+            .inscriptions
+            .iter()
+            .map(|inscription| self.inscribe_inner(inscription))
+            .collect();
 
         outputs
     }

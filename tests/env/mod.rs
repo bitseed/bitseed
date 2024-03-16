@@ -16,8 +16,8 @@ impl<'a> TestEnv<'a> {
 
         let mut bitcoind_image: RunnableImage<BitcoinD> = BitcoinD::default().into();
         bitcoind_image = bitcoind_image
-          .with_network(network)
-          .with_run_option(("--network-alias", "bitcoind"));
+            .with_network(network)
+            .with_run_option(("--network-alias", "bitcoind"));
 
         let bitcoind = docker.run(bitcoind_image);
         dbg!("bitcoind ok");
@@ -28,8 +28,7 @@ impl<'a> TestEnv<'a> {
             "roochpass".to_owned(),
         )
         .into();
-        ord_image = ord_image
-            .with_network(network);
+        ord_image = ord_image.with_network(network);
 
         let ord = docker.run(ord_image);
         dbg!("ord ok");

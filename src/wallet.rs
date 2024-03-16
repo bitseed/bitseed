@@ -1,3 +1,4 @@
+use crate::operation::Operation;
 use anyhow::ensure;
 use anyhow::{anyhow, bail, Result};
 use bitcoin::Address;
@@ -16,7 +17,6 @@ use reqwest::Url;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use crate::operation::Operation;
 
 #[derive(Debug, Clone, Parser)]
 pub struct WalletOption {
