@@ -12,7 +12,7 @@ unit_test:
 
 # Target for running integration tests
 integration_test:
-	cargo test --test '*'
+	RUST_LOG=debug RUST_BACKTRACE=1 cargo test --test '*'
 
 # Target for running E2E tests
 e2e_test:
@@ -24,6 +24,9 @@ test: unit_test integration_test e2e_test
 # Target for cleaning the project
 clean:
 	cargo clean
+
+run_ord:
+	docker run -it --network host bitseed/ord:0.17.0 --regtest --rpc-url=http://127.0.0.1:33045 --bitcoin-rpc-user=roochuser --bitcoin-rpc-pass=roochpass server
 
 # Default target
 .PHONY: default

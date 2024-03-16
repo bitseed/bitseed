@@ -22,7 +22,7 @@ impl ImageArgs for BitcoindImageArgs {
             "-zmqpubrawtx=tcp://0.0.0.0:28333".to_string(),
             "-rpcallowip=0.0.0.0/0".to_string(),
             "-rpcbind=0.0.0.0".to_string(),
-            "-rpcauth='roochuser:925300af2deda1996d8ff66f2a69dc84$681057d8bdccae2d119411befa9a5f949eff770933fc377816348024d25a2402'".to_string(),
+            "-rpcauth=roochuser:925300af2deda1996d8ff66f2a69dc84$681057d8bdccae2d119411befa9a5f949eff770933fc377816348024d25a2402".to_string(),
           ].into_iter(),
         )
     }
@@ -52,7 +52,7 @@ impl Image for BitcoinD {
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
-        vec![WaitFor::message_on_stdout("net thread start")]
+        vec![WaitFor::message_on_stdout("txindex thread start")]
     }
  
     fn expose_ports(&self) -> Vec<u16> {

@@ -6,7 +6,7 @@ use testcontainers::{
 };
 
 const NAME: &str = "bitseed/ord";
-const TAG: &str = "0.16.0";
+const TAG: &str = "0.17.0";
 
 #[derive(Debug, Default, Clone)]
 pub struct OrdImageArgs {
@@ -45,7 +45,7 @@ impl Image for Ord {
     }
 
     fn ready_conditions(&self) -> Vec<WaitFor> {
-        vec![WaitFor::message_on_stdout("ord starting")]
+        vec![WaitFor::message_on_stderr("Listening on")]
     }
  
     fn expose_ports(&self) -> Vec<u16> {
