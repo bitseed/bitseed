@@ -1,5 +1,3 @@
-use crate::inscription;
-
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
