@@ -25,6 +25,7 @@ impl ImageArgs for BitcoindImageArgs {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BitcoinD {
     env_vars: HashMap<String, String>,
 }

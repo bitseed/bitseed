@@ -27,6 +27,7 @@ impl ImageArgs for OrdImageArgs {
     }
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct Ord {
     env_vars: HashMap<String, String>,
 }

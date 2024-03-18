@@ -5,13 +5,13 @@ use bitcoin::BitcoinD;
 use ord::Ord;
 use testcontainers::{clients::Cli, core::Container, RunnableImage};
 
-pub struct TestEnv<'a> {
-    pub bitcoind: Container<'a, BitcoinD>,
-    pub ord: Container<'a, Ord>,
+pub struct TestEnv {
+    pub bitcoind: Container<BitcoinD>,
+    pub ord: Container<Ord>,
 }
 
-impl<'a> TestEnv<'a> {
-    pub fn build(docker: &'a Cli) -> TestEnv<'a> {
+impl TestEnv {
+    pub fn build(docker: &Cli) -> TestEnv {
         let network = "test_network_1";
 
         let mut bitcoind_image: RunnableImage<BitcoinD> = BitcoinD::default().into();
