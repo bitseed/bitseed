@@ -31,3 +31,9 @@ cucumber = "0.20.2"
 testcontainers = { version = "0.15.0", git = "https://github.com/yubing744/testcontainers-rs", rev = "dbb136ef39c1616a6bfa538d01c82a07b8e27524" }
 tokio = { version = "1.12", features = ["macros", "rt-multi-thread", "sync", "time"] }
 jpst = "0.1.1"
+tracing = "0.1"
+
+[[test]]
+name = "integration"
+harness = false  # allows Cucumber to print output instead of libtest
+test = false

@@ -7,15 +7,15 @@ build:
 	cargo build
 
 # Target for running unit tests
-unit_test:
+unit-test:
 	cargo test --lib
 
 # Target for running integration tests
-integration_test:
-	RUST_LOG=debug RUST_BACKTRACE=1 cargo test --test '*'
+integration-test:
+	RUST_LOG=debug cargo test --test '*'
 
 # Target for running all tests (unit and integration)
-test: unit_test integration_test
+test: unit-test integration-test
 
 # Target for cleaning the project
 clean:

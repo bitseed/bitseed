@@ -3,13 +3,13 @@ mod env;
 use std::time::Duration;
 
 use anyhow::{bail, Result};
-use testcontainers::{clients::Cli, core::Container};
 use clap::Parser;
 use cucumber::{given, then, when, World as _};
 use jpst::TemplateContext;
 use serde_json::Value;
-use tracing::{debug, info};
-
+use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}};
+use tracing::{Level, error, debug, info};
+use tracing_subscriber;
 use bitseed::BitseedCli;
 
 use env::bitcoin::BitcoinD;
@@ -40,7 +40,7 @@ async fn sleep(_world: &mut World, args: String) {
     tokio::time::sleep(tokio::time::Duration::from_secs(args)).await;
 }
 
-#[given(expr = "Prepare bitcoind and Ord")] // Cucumber Expression
+#[given(expr = "bitcoind and Ord servers")] // Cucumber Expression
 async fn prepare_bitcoind_and_ord(w: &mut World) {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -51,7 +51,7 @@ async fn prepare_bitcoind_and_ord(w: &mut World) {
     w.ord = Some(test_env.ord);
 }
 
-#[then(expr = "release")] // Cucumber Expression
+#[then(expr = "release bitcoind and Ord servers")] // Cucumber Expression
 async fn release_bitcoind_and_ord(w: &mut World) {
     println!("stop server");
     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -77,31 +77,22 @@ async fn release_bitcoind_and_ord(w: &mut World) {
     }
 }
 
-#[then(regex = r#"cmd: "(.*)?""#)]
-async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
+#[then(regex = r#"cmd ord: "(.*)?""#)]
+fn ord_run_cmd(w: &mut World, input_tpl: String) {
     let bitcoind = w.bitcoind.as_ref().unwrap();
     let ord = w.ord.as_ref().unwrap();
 
-    let bitcoin_rpc_url = format!(
-        "http://127.0.0.1:{}",
-        bitcoind.get_host_port_ipv4(18443)
-    );
-    let ord_rpc_url = &format!(
-        "http://127.0.0.1:{}", 
-        ord.get_host_port_ipv4(80)
-    );
+    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
 
     let mut bitseed_args = vec![
         "--regtest".to_string(),
         format!("--rpc-url={}", bitcoin_rpc_url),
         format!("--bitcoin-rpc-user={}", "roochuser"),
         format!("--bitcoin-rpc-pass={}", "roochpass"),
-        format!("--server-url={}", ord_rpc_url),
     ];
 
-
     if w.tpl_ctx.is_none() {
-        let mut tpl_ctx = TemplateContext::new();
+        let tpl_ctx = TemplateContext::new();
         w.tpl_ctx = Some(tpl_ctx);
     }
     let tpl_ctx = w.tpl_ctx.as_mut().unwrap();
@@ -112,9 +103,130 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
 
     bitseed_args.extend(args.iter().map(|&s| s.to_string()));
 
-    let opts = BitseedCli::parse_from(bitseed_args);
+    let joined_args = bitseed_args.join(" ");
+    debug!("run cmd: ord {}", joined_args);
 
+    let exec_cmd = ExecCommand{
+        cmd:  joined_args,
+        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(5)}],
+    };
+
+    let output = ord.exec(exec_cmd);
+
+    let stdout_string = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stdout to String: {}", e);
+            String::from("Error converting stdout to String")
+        }
+    };
+
+    let stderr_string = match String::from_utf8(output.stderr) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stderr to String: {}", e);
+            String::from("Error converting stderr to String")
+        }
+    };
+
+    tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
+    tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
+
+    debug!("current tpl_ctx: {:?}", tpl_ctx);
+}
+
+#[then(regex = r#"cmd bitcoind: "(.*)?""#)]
+fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
+    let bitcoind = w.bitcoind.as_ref().unwrap();
+    let ord = w.ord.as_ref().unwrap();
+
+    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
+
+    let mut bitseed_args = vec![
+        "--regtest".to_string(),
+        format!("--rpc-url={}", bitcoin_rpc_url),
+        format!("--bitcoin-rpc-user={}", "roochuser"),
+        format!("--bitcoin-rpc-pass={}", "roochpass"),
+    ];
+
+    if w.tpl_ctx.is_none() {
+        let tpl_ctx = TemplateContext::new();
+        w.tpl_ctx = Some(tpl_ctx);
+    }
+    let tpl_ctx = w.tpl_ctx.as_mut().unwrap();
+    let input = eval_command_args(tpl_ctx, input_tpl);
+
+    let args: Vec<&str> = input.split_whitespace().collect();
+    let cmd_name = args[0].clone();
+
+    bitseed_args.extend(args.iter().map(|&s| s.to_string()));
+
+    let joined_args = bitseed_args.join(" ");
+    debug!("run cmd: {}", joined_args);
+
+    let exec_cmd = ExecCommand{
+        cmd:  joined_args,
+        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(5)}],
+    };
+
+    let output = bitcoind.exec(exec_cmd);
+
+    let stdout_string = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stdout to String: {}", e);
+            String::from("Error converting stdout to String")
+        }
+    };
+
+    let stderr_string = match String::from_utf8(output.stderr) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stderr to String: {}", e);
+            String::from("Error converting stderr to String")
+        }
+    };
+
+    tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
+    tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
+
+    debug!("current tpl_ctx: {:?}", tpl_ctx);
+}
+
+#[then(regex = r#"cmd bitseed: "(.*)?""#)]
+fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
+    let bitcoind = w.bitcoind.as_ref().unwrap();
+    let ord = w.ord.as_ref().unwrap();
+
+    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
+    let ord_rpc_url = &format!("http://127.0.0.1:{}", ord.get_host_port_ipv4(80));
+
+    let mut bitseed_args = vec![
+        "--regtest".to_string(),
+        format!("--rpc-url={}", bitcoin_rpc_url),
+        format!("--bitcoin-rpc-user={}", "roochuser"),
+        format!("--bitcoin-rpc-pass={}", "roochpass"),
+        format!("--server-url={}", ord_rpc_url),
+    ];
+
+    if w.tpl_ctx.is_none() {
+        let tpl_ctx = TemplateContext::new();
+        w.tpl_ctx = Some(tpl_ctx);
+    }
+    let tpl_ctx = w.tpl_ctx.as_mut().unwrap();
+    let input = eval_command_args(tpl_ctx, input_tpl);
+
+    let args: Vec<&str> = input.split_whitespace().collect();
+    let cmd_name = args[0].clone();
+
+    bitseed_args.extend(args.iter().map(|&s| s.to_string()));
+
+    let joined_args = bitseed_args.join(" ");
+    debug!("run cmd: bitseed {}", joined_args);
+
+    let opts = BitseedCli::parse_from(bitseed_args);
     let ret = bitseed::run(opts);
+
     match ret {
         Ok(output) => {
             let mut buffer = Vec::new();
@@ -122,17 +234,23 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
 
             let result_json = serde_json::from_slice::<Value>(&buffer);
 
-            if result_json.is_ok() {
-                tpl_ctx
-                    .entry(cmd_name)
-                    .append::<Value>(result_json.unwrap());
+            if let Ok(json_value) = result_json {
+                debug!("bitseed cmd: {} output: {}", cmd_name, json_value);
+
+                tpl_ctx.entry(cmd_name).append::<Value>(json_value);
+            } else {
+                debug!("result_json not ok!");
             }
         }
         Err(err) => {
+            debug!("bitseed cmd: {} error, detail: {:?}", cmd_name, &err);
+
             let err_msg = Value::String(err.to_string());
             tpl_ctx.entry(cmd_name).append::<Value>(err_msg);
         }
     }
+
+    debug!("current tpl_ctx: {:?}", tpl_ctx);
 }
 
 #[then(regex = r#"assert: "([^"]*)""#)]
@@ -245,5 +363,9 @@ fn eval_command_args(ctx: &TemplateContext, args: String) -> String {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(Level::DEBUG)
+        .init();
+
     World::run("tests/features/generator.feature").await;
 }
