@@ -79,14 +79,12 @@ async fn release_bitcoind_and_ord(w: &mut World) {
 
 #[then(regex = r#"cmd ord: "(.*)?""#)]
 fn ord_run_cmd(w: &mut World, input_tpl: String) {
-    let bitcoind = w.bitcoind.as_ref().unwrap();
     let ord = w.ord.as_ref().unwrap();
 
-    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
-
     let mut bitseed_args = vec![
+        "ord".to_string(),
         "--regtest".to_string(),
-        format!("--rpc-url={}", bitcoin_rpc_url),
+        format!("--rpc-url={}", "http://bitcoind:18443"),
         format!("--bitcoin-rpc-user={}", "roochuser"),
         format!("--bitcoin-rpc-pass={}", "roochpass"),
     ];
@@ -129,6 +127,9 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
         }
     };
 
+    debug!("run cmd: ord stdout: {:?}", stdout_string);
+    debug!("run cmd: ord stderr: {:?}", stderr_string);
+
     tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
     tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
 
@@ -142,12 +143,7 @@ fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
 
     let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
 
-    let mut bitseed_args = vec![
-        "--regtest".to_string(),
-        format!("--rpc-url={}", bitcoin_rpc_url),
-        format!("--bitcoin-rpc-user={}", "roochuser"),
-        format!("--bitcoin-rpc-pass={}", "roochpass"),
-    ];
+    let mut bitseed_args = vec![];
 
     if w.tpl_ctx.is_none() {
         let tpl_ctx = TemplateContext::new();
@@ -166,7 +162,7 @@ fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
 
     let exec_cmd = ExecCommand{
         cmd:  joined_args,
-        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(5)}],
+        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(10)}],
     };
 
     let output = bitcoind.exec(exec_cmd);
@@ -186,6 +182,9 @@ fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
             String::from("Error converting stderr to String")
         }
     };
+
+    debug!("run cmd: bitcoind stdout: {}", stdout_string);
+    debug!("run cmd: bitcoind stderr: {}", stderr_string);
 
     tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
     tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
