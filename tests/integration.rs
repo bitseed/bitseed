@@ -77,6 +77,64 @@ async fn release_bitcoind_and_ord(w: &mut World) {
     }
 }
 
+#[then(regex = r#"cmd ord bash: "(.*)?""#)]
+fn ord_bash_run_cmd(w: &mut World, input_tpl: String) {
+    let ord = w.ord.as_ref().unwrap();
+
+    let mut bitseed_args = vec![
+        "/bin/bash".to_string(),
+    ];
+
+    if w.tpl_ctx.is_none() {
+        let tpl_ctx = TemplateContext::new();
+        w.tpl_ctx = Some(tpl_ctx);
+    }
+    let tpl_ctx = w.tpl_ctx.as_mut().unwrap();
+    let input = eval_command_args(tpl_ctx, input_tpl);
+
+    let args: Vec<&str> = input.split_whitespace().collect();
+    let cmd_name = args[0].clone();
+
+    bitseed_args.extend(args.iter().map(|&s| s.to_string()));
+
+    let joined_args = bitseed_args.join(" ");
+    debug!("run cmd: ord {}", joined_args);
+
+    let exec_cmd = ExecCommand{
+        cmd:  joined_args,
+        ready_conditions: vec![WaitFor::Nothing],
+    };
+
+    let output = ord.exec(exec_cmd);
+
+    let stdout_string = match String::from_utf8(output.stdout) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stdout to String: {}", e);
+            String::from("Error converting stdout to String")
+        }
+    };
+
+    let stderr_string = match String::from_utf8(output.stderr) {
+        Ok(s) => s,
+        Err(e) => {
+            error!("Failed to convert stderr to String: {}", e);
+            String::from("Error converting stderr to String")
+        }
+    };
+
+    debug!("run cmd: ord stdout: {}", stdout_string);
+
+    // Check if stderr_string is not empty and panic if it contains any content.
+    if !stderr_string.is_empty() {
+        panic!("Command execution failed with errors: {}", stderr_string);
+    }
+
+    tpl_ctx.entry(format!("{}", cmd_name)).append::<String>(stdout_string);
+
+    debug!("current tpl_ctx: {:?}", tpl_ctx);
+}
+
 #[then(regex = r#"cmd ord: "(.*)?""#)]
 fn ord_run_cmd(w: &mut World, input_tpl: String) {
     let ord = w.ord.as_ref().unwrap();
@@ -106,7 +164,7 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
 
     let exec_cmd = ExecCommand{
         cmd:  joined_args,
-        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(5)}],
+        ready_conditions: vec![WaitFor::Nothing],
     };
 
     let output = ord.exec(exec_cmd);
@@ -127,23 +185,32 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
         }
     };
 
-    debug!("run cmd: ord stdout: {:?}", stdout_string);
-    debug!("run cmd: ord stderr: {:?}", stderr_string);
+    debug!("run cmd: ord stdout: {}", stdout_string);
 
-    tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
-    tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
+    // Check if stderr_string is not empty and panic if it contains any content.
+    if !stderr_string.is_empty() {
+        panic!("Command execution failed with errors: {}", stderr_string);
+    }
+
+    let result_json = serde_json::from_str::<Value>(&stdout_string);
+    if let Ok(json_value) = result_json {
+        debug!("cmd ord: {} output: {}", cmd_name, json_value);
+        tpl_ctx.entry(cmd_name).append::<Value>(json_value);
+    } else {
+        debug!("result_json not ok!");
+    }
 
     debug!("current tpl_ctx: {:?}", tpl_ctx);
 }
 
-#[then(regex = r#"cmd bitcoind: "(.*)?""#)]
-fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
+#[then(regex = r#"cmd bitcoin-cli: "(.*)?""#)]
+fn bitcoincli_run_cmd(w: &mut World, input_tpl: String) {
     let bitcoind = w.bitcoind.as_ref().unwrap();
-    let ord = w.ord.as_ref().unwrap();
 
-    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
-
-    let mut bitseed_args = vec![];
+    let mut bitcoincli_args = vec![
+        "bitcoin-cli".to_string(),
+        "-regtest".to_string(),
+    ];
 
     if w.tpl_ctx.is_none() {
         let tpl_ctx = TemplateContext::new();
@@ -155,14 +222,14 @@ fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
     let args: Vec<&str> = input.split_whitespace().collect();
     let cmd_name = args[0].clone();
 
-    bitseed_args.extend(args.iter().map(|&s| s.to_string()));
+    bitcoincli_args.extend(args.iter().map(|&s| s.to_string()));
 
-    let joined_args = bitseed_args.join(" ");
+    let joined_args = bitcoincli_args.join(" ");
     debug!("run cmd: {}", joined_args);
 
     let exec_cmd = ExecCommand{
         cmd:  joined_args,
-        ready_conditions: vec![WaitFor::Duration{length: Duration::from_secs(10)}],
+        ready_conditions: vec![WaitFor::Nothing],
     };
 
     let output = bitcoind.exec(exec_cmd);
@@ -183,11 +250,20 @@ fn bitcoind_run_cmd(w: &mut World, input_tpl: String) {
         }
     };
 
-    debug!("run cmd: bitcoind stdout: {}", stdout_string);
-    debug!("run cmd: bitcoind stderr: {}", stderr_string);
+    debug!("run cmd: bitcoincli stdout: {}", stdout_string);
 
-    tpl_ctx.entry(format!("{}-stdout", cmd_name)).append::<String>(stdout_string);
-    tpl_ctx.entry(format!("{}-stderr", cmd_name)).append::<String>(stderr_string);
+    // Check if stderr_string is not empty and panic if it contains any content.
+    if !stderr_string.is_empty() {
+        panic!("Command execution failed with errors: {}", stderr_string);
+    }
+
+    let result_json = serde_json::from_str::<Value>(&stdout_string);
+    if let Ok(json_value) = result_json {
+        debug!("cmd bitcoincli: {} output: {}", cmd_name, json_value);
+        tpl_ctx.entry(cmd_name).append::<Value>(json_value);
+    } else {
+        debug!("result_json not ok!");
+    }
 
     debug!("current tpl_ctx: {:?}", tpl_ctx);
 }

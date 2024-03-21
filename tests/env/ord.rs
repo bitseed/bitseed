@@ -1,6 +1,10 @@
+use std::time::Duration;
 use std::collections::HashMap;
 
-use testcontainers::{core::WaitFor, Image, ImageArgs};
+use testcontainers::{
+    core::{WaitFor, ContainerState, ExecCommand}, 
+    Image, ImageArgs,
+};
 
 const NAME: &str = "bitseed/ord";
 const TAG: &str = "0.17.0";
@@ -53,6 +57,13 @@ impl Image for Ord {
 
     fn env_vars(&self) -> Box<dyn Iterator<Item = (&String, &String)> + '_> {
         Box::new(self.env_vars.iter())
+    }
+
+    fn exec_after_start(&self, cs: ContainerState) -> Vec<ExecCommand> {
+        vec![ExecCommand{
+            cmd:  "/bin/rm -rf /data/.bitcoin/regtest/wallets/ord".to_owned(),
+            ready_conditions: vec![WaitFor::Nothing],
+        }]
     }
 }
 
