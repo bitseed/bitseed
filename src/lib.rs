@@ -23,9 +23,9 @@ mod wallet;
 #[command(bin_name = "bitseed")]
 pub struct BitseedCli {
     #[clap(flatten)]
-    wallet_options: wallet::WalletOption,
+    pub wallet_options: wallet::WalletOption,
     #[command(subcommand)]
-    command: Commands,
+    pub command: Commands,
 }
 
 pub trait Output: Send {

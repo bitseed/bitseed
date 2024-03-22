@@ -1,6 +1,7 @@
 mod env;
 
 use std::time::Duration;
+use backtrace::Backtrace;
 
 use anyhow::{bail, Result};
 use clap::Parser;
@@ -277,7 +278,7 @@ fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let ord_rpc_url = &format!("http://127.0.0.1:{}", ord.get_host_port_ipv4(80));
 
     let mut bitseed_args = vec![
-        "--regtest".to_string(),
+        "--chain=regtest".to_string(),
         format!("--rpc-url={}", bitcoin_rpc_url),
         format!("--bitcoin-rpc-user={}", "roochuser"),
         format!("--bitcoin-rpc-pass={}", "roochpass"),
@@ -299,7 +300,9 @@ fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let joined_args = bitseed_args.join(" ");
     debug!("run cmd: bitseed {}", joined_args);
 
-    let opts = BitseedCli::parse_from(bitseed_args);
+    let mut opts = BitseedCli::parse_from(bitseed_args);
+    opts.wallet_options.chain_options.regtest = true;
+
     let ret = bitseed::run(opts);
 
     match ret {
@@ -320,7 +323,7 @@ fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
         Err(err) => {
             debug!("bitseed cmd: {} error, detail: {:?}", cmd_name, &err);
 
-            let err_msg = Value::String(err.to_string());
+            let err_msg = Value::String(format!("bitseed cmd error: {:?}", &err));
             tpl_ctx.entry(cmd_name).append::<Value>(err_msg);
         }
     }
@@ -357,6 +360,12 @@ async fn assert_output(world: &mut World, orginal_args: String) {
                 "contains" => assert!(
                     first.contains(&second),
                     "Assert {:?} contains {:?} failed",
+                    first,
+                    second
+                ),
+                "not_contains" => assert!(
+                    !first.contains(&second),
+                    "Assert {:?} not_contains {:?} failed",
                     first,
                     second
                 ),

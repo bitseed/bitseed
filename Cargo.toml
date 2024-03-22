@@ -32,6 +32,7 @@ testcontainers = { version = "0.15.0", git = "https://github.com/yubing744/testc
 tokio = { version = "1.12", features = ["macros", "rt-multi-thread", "sync", "time"] }
 jpst = "0.1.1"
 tracing = "0.1"
+backtrace = "0.3"
 
 [[test]]
 name = "integration"
