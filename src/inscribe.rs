@@ -238,9 +238,10 @@ impl Inscriber {
         let runic_utxos = self.wallet.get_runic_outputs()?;
         let chain = self.wallet.chain();
         let commit_tx_change = [
-            self.wallet.get_change_address()?,
-            self.wallet.get_change_address()?,
+            self.wallet.get_primary_address()?,
+            self.wallet.get_primary_address()?,
         ];
+
         let wallet_inscriptions = self.wallet.get_inscriptions()?;
 
         let destination = self.destination.clone();

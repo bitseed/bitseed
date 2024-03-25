@@ -107,6 +107,13 @@ impl Wallet {
         self.ord_wallet.get_locked_outputs()
     }
 
+    pub fn get_primary_address(&self) -> Result<Address> {
+        let client = self.ord_wallet.bitcoin_client().unwrap();
+        let address = client.get_new_address(None, Some(bitcoincore_rpc::json::AddressType::Bech32m))?;
+
+        address.require_network(self.chain().network()).map_err(anyhow::Error::from)
+    }
+
     pub fn get_change_address(&self) -> Result<Address> {
         self.ord_wallet.get_change_address()
     }

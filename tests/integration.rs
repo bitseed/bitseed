@@ -1,7 +1,11 @@
 mod env;
 
-use std::time::Duration;
+use std::panic;
 use backtrace::Backtrace;
+use std::time::Duration;
+
+use std::thread;
+use std::sync::mpsc;
 
 use anyhow::{bail, Result};
 use clap::Parser;
@@ -270,7 +274,7 @@ fn bitcoincli_run_cmd(w: &mut World, input_tpl: String) {
 }
 
 #[then(regex = r#"cmd bitseed: "(.*)?""#)]
-fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
+async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let bitcoind = w.bitcoind.as_ref().unwrap();
     let ord = w.ord.as_ref().unwrap();
 
@@ -300,10 +304,18 @@ fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let joined_args = bitseed_args.join(" ");
     debug!("run cmd: bitseed {}", joined_args);
 
-    let mut opts = BitseedCli::parse_from(bitseed_args);
-    opts.wallet_options.chain_options.regtest = true;
+    let (tx, rx) = mpsc::channel();
 
-    let ret = bitseed::run(opts);
+    // fix bitseed ord client report error: Cannot drop a runtime in a context where blocking is not allowed. This happens when a runtime is dropped from within an asynchronous context.
+    thread::spawn(move || {
+        let mut opts = BitseedCli::parse_from(bitseed_args);
+        opts.wallet_options.chain_options.regtest = true;
+        
+        let ret = bitseed::run(opts);
+        tx.send(ret).unwrap();
+    });
+
+    let ret = rx.recv().unwrap();
 
     match ret {
         Ok(output) => {

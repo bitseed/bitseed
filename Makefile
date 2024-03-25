@@ -12,7 +12,7 @@ unit-test:
 
 # Target for running integration tests
 integration-test:
-	RUST_LOG=debug cargo test --test '*'
+	RUST_LOG=debug RUST_BACKTRACE=1 cargo test --test '*'
 
 # Target for running all tests (unit and integration)
 test: unit-test integration-test
