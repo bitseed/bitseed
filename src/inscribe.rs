@@ -184,6 +184,7 @@ impl Inscriber {
             Operation::Deploy(deploy_record) => deploy_record,
             _ => bail!("deploy transaction must have a deploy operation"),
         };
+
         let generator_loader = GeneratorLoader::new(self.wallet.clone());
         let generator = generator_loader.load(&deploy_record.generator)?;
 
@@ -202,6 +203,7 @@ impl Inscriber {
 
         let output =
             generator.inscribe_generate(deploy_record.deploy_args, &seed, destination, user_input);
+
         let sft = SFT {
             tick: deploy_record.tick,
             amount: output.amount,
@@ -209,6 +211,7 @@ impl Inscriber {
             content: output.content,
         };
         let mint_record = MintRecord { sft };
+
         self.with_operation(Operation::Mint(mint_record))
     }
 

@@ -1,6 +1,7 @@
 pub mod bitcoin;
 pub mod ord;
 
+use uuid::Uuid;
 use tracing::debug;
 use bitcoin::BitcoinD;
 use ord::Ord;
@@ -13,11 +14,12 @@ pub struct TestEnv {
 
 impl TestEnv {
     pub fn build(docker: &Cli) -> TestEnv {
-        let network = "test_network_1";
+        let network_uuid = Uuid::new_v4();
+        let network = format!("test_network_{}", network_uuid);
 
         let mut bitcoind_image: RunnableImage<BitcoinD> = BitcoinD::default().into();
         bitcoind_image = bitcoind_image
-            .with_network(network)
+            .with_network(network.clone())
             .with_run_option(("--network-alias", "bitcoind"));
 
         let bitcoind = docker.run(bitcoind_image);
@@ -29,7 +31,7 @@ impl TestEnv {
             "roochpass".to_owned(),
         )
         .into();
-        ord_image = ord_image.with_network(network);
+        ord_image = ord_image.with_network(network.clone());
 
         let ord = docker.run(ord_image);
         debug!("ord ok");
