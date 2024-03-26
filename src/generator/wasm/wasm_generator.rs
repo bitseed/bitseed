@@ -273,3 +273,64 @@ impl Generator for WASMGenerator {
         inscribe_generate_output
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitcoin::hashes::sha256d;
+    use bitcoin::{Address, Network};
+    use bitcoin::{BlockHash, Txid};
+    use std::fs::read;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_inscribe_generate_normal() {
+        // Read WASM binary from file
+        let bytecode = read("./generator/cpp/generator.wasm").expect("failed to read WASM file");
+        let generator = WASMGenerator::new(bytecode);
+
+        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+
+        // Block hash
+        let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let block_hash_inner = sha256d::Hash::from_str(&block_hash_hex).unwrap();
+        let block_hash = BlockHash::from(block_hash_inner);
+
+        // Txid
+        let txid_hex = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+        let txid_inner = sha256d::Hash::from_str(&txid_hex).unwrap();
+        let txid = Txid::from(txid_inner);
+
+        let seed = InscribeSeed {
+            block_hash,
+            utxo: bitcoin::OutPoint::new(txid, 0),
+        };
+
+        // Recipient
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
+            .require_network(Network::Bitcoin).unwrap();
+
+        // User input
+        let user_input = Some("test user input".to_string());
+
+        let output = generator.inscribe_generate(deploy_args, &seed, recipient, user_input);
+
+        // Add assertions for output
+        assert_eq!(output.amount, 1000);
+        assert!(output.attributes.is_some());
+
+        // Check if attributes contain expected key-value pairs
+        let attributes = output.attributes.unwrap();
+        assert!(attributes.is_map());
+        let map = attributes.as_map().unwrap();
+
+        let height_entry = map.iter().find(|(key, _)| key.as_text() == Some("height"));
+        assert!(height_entry.is_some());
+
+        let (_, height_value) = height_entry.unwrap();
+        assert!(height_value.is_integer());
+        let height = height_value.as_integer().unwrap();
+        assert!(height.try_into().unwrap_or(0) >= 1);
+        assert!(height.try_into().unwrap_or(i128::MAX) <= 1000);
+    }
+}
