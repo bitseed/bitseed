@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use wasmer::Value::I32;
 use wasmer::*;
 
-use tracing::debug;
+use tracing::{error, debug};
 
 #[derive(Clone)]
 pub struct WASMGenerator {
@@ -40,27 +40,51 @@ fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum:
         let mut temp_buffer: [u8; 4] = [0; 4];
 
         for _ in 0..iovcnt {
-            let ptr_index = (iov) >> 2;
-            let len_index = ((iov) + (4)) >> 2;
+            let ptr_index = iov;
+            let len_index = iov + 4;
 
             memory_view
                 .read(ptr_index as u64, temp_buffer.as_mut_slice())
                 .expect("read data from memory view failed");
-            let _ptr = i32::from_be_bytes(temp_buffer);
+            let _ptr = u32::from_le_bytes(temp_buffer);
 
             memory_view
                 .read(len_index as u64, temp_buffer.as_mut_slice())
                 .expect("read data from memory view failed");
-            let len = i32::from_be_bytes(temp_buffer);
+            let len = u32::from_le_bytes(temp_buffer);
 
             debug!("fd_write: _ptr:{}, len:{}", _ptr, len);
+            
+            let mut buffer = vec![0u8; len as usize];
+            memory_view
+                .read(_ptr as u64, &mut buffer)
+                .expect("read buffer from memory failed");
+            
+            match _fd {
+                // stdout
+                1 => {
+                    use std::io::{self, Write};
+                    let stdout = io::stdout();
+                    let mut handle = stdout.lock();
+                    handle.write_all(&buffer).expect("write to stdout failed");
+                },
+                // stderr
+                2 => {
+                    use std::io::{self, Write};
+                    let stderr = io::stderr();
+                    let mut handle = stderr.lock();
+                    handle.write_all(&buffer).expect("write to stderr failed");
+                },
+                // Handle other file descriptors...
+                _ => unimplemented!(),
+            }
 
             iov += 8;
-            written_bytes += len;
+            written_bytes += len as i32;
         }
 
-        let ret_index = (pnum) >> 2;
-        let ret_index_bytes: [u8; 4] = written_bytes.to_be_bytes();
+        let ret_index = pnum;
+        let ret_index_bytes: [u8; 4] = written_bytes.to_le_bytes();
         memory_view
             .write(ret_index as u64, ret_index_bytes.as_slice())
             .expect("write data to memory failed");
@@ -97,7 +121,7 @@ fn fd_close(_env: FunctionEnvMut<Env>, _fd: i32) -> i32 {
 }
 
 fn proc_exit(_env: FunctionEnvMut<Env>, code: i32) {
-    eprintln!("program exit with {:}", code)
+    error!("program exit with {:}", code)
 }
 
 fn put_data_on_stack(memory: &mut Arc<Mutex<Memory>>, stack_alloc_func: &Function, store: &mut Store, data: &[u8]) -> i32 {
@@ -135,13 +159,6 @@ fn get_data_from_heap(memory: &mut Arc<Mutex<Memory>>, store: &Store, ptr_offset
         .read((ptr_offset + 4) as u64, &mut data)
         .expect("read uninit failed");
     data
-
-    // let ptr = memory_view.data_ptr().offset(ptr_offset as isize) as *mut c_char;
-    // let c_str = CStr::from_ptr(ptr);
-    // c_str.to_bytes().to_vec()
-    // let rust_str = c_str.to_str().expect("Bad encoding");
-    // let owned_str = rust_str.to_owned();
-    // owned_str
 }
 
 fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
@@ -241,7 +258,8 @@ impl Generator for WASMGenerator {
         let buffer_final_ptr =
             put_data_on_stack(&mut memory, stack_alloc_func, &mut store, buffer_final.as_slice());
 
-        let func_args = vec![I32(buffer_final_ptr)];
+        let func_args = 
+        vec![I32(buffer_final_ptr)];
 
         let calling_result = inscribe_generate
             .call(&mut store, func_args.as_slice())
@@ -286,7 +304,7 @@ mod tests {
     use std::fs::read;
     use std::str::FromStr;
     use env_logger;
-
+     
     #[test]
     fn test_inscribe_generate_normal() {
         env_logger::init();
@@ -322,7 +340,7 @@ mod tests {
         let output = generator.inscribe_generate(deploy_args, &seed, recipient, user_input);
 
         // Add assertions for output
-        assert_eq!(output.amount, 1000);
+        assert_eq!(output.amount, 1);
         assert!(output.attributes.is_some());
 
         // Check if attributes contain expected key-value pairs

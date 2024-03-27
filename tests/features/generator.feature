@@ -31,7 +31,7 @@ Feature: Bitseed CLI integration tests
     Then sleep: "5"
 
     # mint 
-    Then cmd bitseed: "mint --fee-rate 1 --deploy-inscription-id {{$.deploy[-1][0].inscription.Id}}"
+    Then cmd bitseed: "mint --fee-rate 1 --deploy-inscription-id {{$.deploy[-1][0].inscription.Id}} --user-input hello_bitseed" 
     Then assert: "'{{$.mint[-1]}}' not_contains error"
 
     # end
