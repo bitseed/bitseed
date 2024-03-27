@@ -8,7 +8,7 @@ build:
 
 # Target for running unit tests
 unit-test:
-	cargo test --lib
+	RUST_LOG=debug RUST_BACKTRACE=full cargo test --lib
 
 # Target for running integration tests
 integration-test:
