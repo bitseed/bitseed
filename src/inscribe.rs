@@ -1,3 +1,5 @@
+use crate::commands::mint;
+
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
@@ -6,7 +8,7 @@ use {
         wallet::Wallet,
         GENERATOR_TICK,
     },
-    anyhow::{anyhow, bail, ensure, Result},
+    anyhow::{anyhow, bail, ensure, Result, Error},
     bitcoin::{
         absolute::LockTime,
         address::NetworkUnchecked,
@@ -97,7 +99,7 @@ pub struct InscribeOutput {
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
-    inscription: Option<Inscription>,
+    inscriptions: Vec<Inscription>,
     satpoint: SatPoint,
     destination: Address,
 }
@@ -126,7 +128,7 @@ impl Inscriber {
         Ok(Self {
             wallet,
             option,
-            inscription: None,
+            inscriptions: Vec::new(),
             satpoint,
             destination,
         })
@@ -184,6 +186,7 @@ impl Inscriber {
             Operation::Deploy(deploy_record) => deploy_record,
             _ => bail!("deploy transaction must have a deploy operation"),
         };
+
         let generator_loader = GeneratorLoader::new(self.wallet.clone());
         let generator = generator_loader.load(&deploy_record.generator)?;
 
@@ -202,6 +205,7 @@ impl Inscriber {
 
         let output =
             generator.inscribe_generate(deploy_record.deploy_args, &seed, destination, user_input);
+
         let sft = SFT {
             tick: deploy_record.tick,
             amount: output.amount,
@@ -209,31 +213,95 @@ impl Inscriber {
             content: output.content,
         };
         let mint_record = MintRecord { sft };
+
         self.with_operation(Operation::Mint(mint_record))
+    }
+
+    pub fn with_split(self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
+        let operation = self
+            .wallet
+            .get_operation_by_inscription_id(asset_inscription_id)?;
+
+        let mint_record = match operation {
+            Operation::Mint(mint_record) => mint_record,
+            _ => bail!("mint transaction must have a mint operation"),
+        };
+
+        let sft_c = mint_record.sft;
+
+        ensure!(
+            sft_c.amount > 1,
+            "The amount of SFT to be split requires approximately 1"
+        );
+
+        let sft_a = SFT {
+            tick: sft_c.tick.clone(),
+            amount: amount,
+            attributes: sft_c.attributes.clone(),
+            content: sft_c.content.clone(),
+        };
+
+        let sft_b = SFT {
+            tick: sft_c.tick,
+            amount: sft_c.amount - amount,
+            attributes: sft_c.attributes,
+            content: sft_c.content,
+        };
+
+        let mint_record_a = MintRecord { sft: sft_a };
+        let result = self.with_operation(Operation::Mint(mint_record_a));
+
+        let mint_record_b = MintRecord { sft: sft_b };
+        let result = result.unwrap().with_operation(Operation::Mint(mint_record_b));
+
+        result
     }
 
     fn with_operation(mut self, operation: Operation) -> Result<Self> {
         let inscription = operation.to_inscription();
-        self.inscription = Some(inscription);
+        self.inscriptions.push(inscription);
         Ok(self)
     }
 
-    pub fn inscribe(self) -> Result<InscribeOutput> {
+    pub fn inscribes(&self) -> Result<Vec<InscribeOutput>> {
+        let outputs: Result<Vec<InscribeOutput>, _> = self
+            .inscriptions
+            .iter()
+            .map(|inscription| self.inscribe_inner(inscription))
+            .collect();
+
+        outputs
+    }
+
+    pub fn inscribe(&self) -> Result<InscribeOutput> {
+        let outputs = self.inscribes();
+
+        match outputs {
+            Ok(inscribe_outputs) => {
+                if let Some(first_output) = inscribe_outputs.into_iter().next() {
+                    Ok(first_output)
+                } else {
+                    Err(anyhow::anyhow!("No inscriptions found"))
+                }
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    fn inscribe_inner(&self, inscription: &Inscription) -> Result<InscribeOutput> {
         let mut utxos = self.wallet.get_unspent_outputs()?;
         let locked_utxos = self.wallet.get_locked_outputs()?;
         let runic_utxos = self.wallet.get_runic_outputs()?;
         let chain = self.wallet.chain();
         let commit_tx_change = [
-            self.wallet.get_change_address()?,
-            self.wallet.get_change_address()?,
+            self.wallet.get_primary_address()?,
+            self.wallet.get_primary_address()?,
         ];
+
         let wallet_inscriptions = self.wallet.get_inscriptions()?;
 
-        let destination = self.destination;
+        let destination = self.destination.clone();
         let satpoint = self.satpoint;
-        let inscription = self
-            .inscription
-            .ok_or_else(|| anyhow!("inscription not set"))?;
 
         let secp256k1 = Secp256k1::new();
         let key_pair = UntweakedKeyPair::new(&secp256k1, &mut rand::thread_rng());
@@ -426,7 +494,7 @@ impl Inscriber {
                 commit_tx: commit_tx.txid(),
                 reveal_tx: reveal_tx.txid(),
                 total_fees: total_fees,
-                inscription: InscriptionOrId::Inscription(inscription),
+                inscription: InscriptionOrId::Inscription(inscription.clone()),
             });
         }
 

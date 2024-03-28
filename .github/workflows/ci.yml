@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        components: rustfmt, clippy 
+    - name: build
+      run: make build
+      
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Rust 
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        
+    - name: Run unit tests
+      run: make unit_test
+      
+    - name: Set up Docker
+      uses: docker-practice/actions-setup-docker@master
+      
+    - name: Start Docker
+      run: |
+        docker --version
+        sudo dockerd  &
+        sleep 6
+        docker images
+        
+    - name: Run integration tests  
+      run: make integration_test
