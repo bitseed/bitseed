@@ -1,3 +1,5 @@
+use crate::commands::mint;
+
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
@@ -6,7 +8,7 @@ use {
         wallet::Wallet,
         GENERATOR_TICK,
     },
-    anyhow::{anyhow, bail, ensure, Result},
+    anyhow::{anyhow, bail, ensure, Result, Error},
     bitcoin::{
         absolute::LockTime,
         address::NetworkUnchecked,
@@ -215,8 +217,44 @@ impl Inscriber {
         self.with_operation(Operation::Mint(mint_record))
     }
 
-    pub fn with_split(mut self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
-        Ok(self)
+    pub fn with_split(self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
+        let operation = self
+            .wallet
+            .get_operation_by_inscription_id(asset_inscription_id)?;
+
+        let mint_record = match operation {
+            Operation::Mint(mint_record) => mint_record,
+            _ => bail!("mint transaction must have a mint operation"),
+        };
+
+        let sft_c = mint_record.sft;
+
+        ensure!(
+            sft_c.amount > 1,
+            "The amount of SFT to be split requires approximately 1"
+        );
+
+        let sft_a = SFT {
+            tick: sft_c.tick.clone(),
+            amount: amount,
+            attributes: sft_c.attributes.clone(),
+            content: sft_c.content.clone(),
+        };
+
+        let sft_b = SFT {
+            tick: sft_c.tick,
+            amount: sft_c.amount - amount,
+            attributes: sft_c.attributes,
+            content: sft_c.content,
+        };
+
+        let mint_record_a = MintRecord { sft: sft_a };
+        let result = self.with_operation(Operation::Mint(mint_record_a));
+
+        let mint_record_b = MintRecord { sft: sft_b };
+        let result = result.unwrap().with_operation(Operation::Mint(mint_record_b));
+
+        result
     }
 
     fn with_operation(mut self, operation: Operation) -> Result<Self> {
@@ -225,7 +263,7 @@ impl Inscriber {
         Ok(self)
     }
 
-    pub fn inscribe(&self) -> Result<Vec<InscribeOutput>> {
+    pub fn inscribes(&self) -> Result<Vec<InscribeOutput>> {
         let outputs: Result<Vec<InscribeOutput>, _> = self
             .inscriptions
             .iter()
@@ -233,6 +271,21 @@ impl Inscriber {
             .collect();
 
         outputs
+    }
+
+    pub fn inscribe(&self) -> Result<InscribeOutput> {
+        let outputs = self.inscribes();
+
+        match outputs {
+            Ok(inscribe_outputs) => {
+                if let Some(first_output) = inscribe_outputs.into_iter().next() {
+                    Ok(first_output)
+                } else {
+                    Err(anyhow::anyhow!("No inscriptions found"))
+                }
+            },
+            Err(e) => Err(e),
+        }
     }
 
     fn inscribe_inner(&self, inscription: &Inscription) -> Result<InscribeOutput> {

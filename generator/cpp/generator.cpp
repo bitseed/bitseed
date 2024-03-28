@@ -96,7 +96,7 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
 
     json content(json::value_t::object);
     json top_json_output;
-    top_json_output.emplace("amount", 1);
+    top_json_output.emplace("amount", 1000);
     top_json_output.emplace("attributes", json_output);
     top_json_output.emplace("content", content);
 
