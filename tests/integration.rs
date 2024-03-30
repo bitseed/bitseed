@@ -1,4 +1,4 @@
-mod env;
+mod images;
 
 use std::panic;
 use backtrace::Backtrace;
@@ -12,14 +12,14 @@ use clap::Parser;
 use cucumber::{given, then, when, World as _};
 use jpst::TemplateContext;
 use serde_json::Value;
-use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}};
+use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}, RunnableImage};
 use tracing::{Level, error, debug, info};
 use tracing_subscriber;
 use bitseed::BitseedCli;
 
-use env::bitcoin::BitcoinD;
-use env::ord::Ord;
-use env::TestEnv;
+use uuid::Uuid;
+use images::bitcoin::BitcoinD;
+use images::ord::Ord;
 
 #[derive(cucumber::World, Debug)]
 struct World {
@@ -50,10 +50,36 @@ async fn prepare_bitcoind_and_ord(w: &mut World) {
     tokio::time::sleep(Duration::from_secs(2)).await;
 
     let docker = Cli::default();
-    let test_env = TestEnv::build(&docker);
 
-    w.bitcoind = Some(test_env.bitcoind);
-    w.ord = Some(test_env.ord);
+    let network_uuid = Uuid::new_v4();
+    let network = format!("test_network_{}", network_uuid);
+
+
+    let mut bitcoind_image: RunnableImage<BitcoinD> = BitcoinD::new(
+        format!("0.0.0.0:{}", bitcoind_port),
+        bitcoind_user.clone(),
+        bitcoind_pass.clone(),
+    ).into();
+    bitcoind_image = bitcoind_image
+        .with_network(network.clone())
+        .with_run_option(("--network-alias", "bitcoind"));
+
+    let bitcoind = docker.run(bitcoind_image);
+    debug!("bitcoind ok");
+
+    let mut ord_image: RunnableImage<Ord> = Ord::new(
+        format!("http://bitcoind:{}", bitcoind_port),
+        bitcoind_user.clone(),
+        bitcoind_pass.clone(),
+    )
+    .into();
+    ord_image = ord_image.with_network(network.clone());
+
+    let ord = docker.run(ord_image);
+    debug!("ord ok");
+
+    w.bitcoind = Some(bitcoind);
+    w.ord = Some(ord);
 }
 
 #[then(expr = "release bitcoind and Ord servers")] // Cucumber Expression
