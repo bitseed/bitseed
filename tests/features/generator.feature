@@ -45,4 +45,3 @@ Feature: Bitseed CLI integration tests
 
     # end
     Then release bitcoind and Ord servers
-
