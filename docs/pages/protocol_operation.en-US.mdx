@@ -90,3 +90,14 @@ B.tick = C.tick
 A.attributes = C.attributes
 B.attributes = C.attributes
 ```
+
+Below is a table listing the properties of the Bitseed split instruction:
+
+| Attribute                          | Description                                                       | Required |
+| ---------------------------------- | ----------------------------------------------------------------- | -------- |
+| metaprotocol                       | Protocol name, must be "bitseed"                                  | Yes      |
+| metadata.op                        | Operation name, must be "split"                                   | Yes      |
+| metadata.tick                      | Type, 4-32 characters, case-insensitive                           | Yes      |
+| metadata.amount                    | part amount, an integer u64                                       | Yes      |
+| metadata.attributes                | SFT attributes, same with original Inscription attributes         | No       |
+
