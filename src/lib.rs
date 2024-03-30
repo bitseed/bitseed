@@ -52,7 +52,6 @@ enum Commands {
     Generator(commands::generator::GeneratorCommand),
     Deploy(commands::deploy::DeployCommand),
     Mint(commands::mint::MintCommand),
-    Split(commands::split::SplitCommand),
 }
 
 pub fn run(cli: BitseedCli) -> SubcommandResult {
@@ -61,7 +60,6 @@ pub fn run(cli: BitseedCli) -> SubcommandResult {
         Commands::Generator(generator) => generator.run(wallet),
         Commands::Deploy(deploy) => deploy.run(wallet),
         Commands::Mint(mint) => mint.run(wallet),
-        Commands::Split(split) => split.run(wallet),
     }?;
     
     Ok(output)

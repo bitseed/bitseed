@@ -97,7 +97,7 @@ pub struct InscribeOutput {
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
-    inscriptions: Vec<Inscription>,
+    inscription: Option<Inscription>,
     satpoint: SatPoint,
     destination: Address,
 }
@@ -126,7 +126,7 @@ impl Inscriber {
         Ok(Self {
             wallet,
             option,
-            inscriptions: Vec::new(),
+            inscription: None,
             satpoint,
             destination,
         })
@@ -184,7 +184,6 @@ impl Inscriber {
             Operation::Deploy(deploy_record) => deploy_record,
             _ => bail!("deploy transaction must have a deploy operation"),
         };
-
         let generator_loader = GeneratorLoader::new(self.wallet.clone());
         let generator = generator_loader.load(&deploy_record.generator)?;
 
@@ -203,7 +202,6 @@ impl Inscriber {
 
         let output =
             generator.inscribe_generate(deploy_record.deploy_args, &seed, destination, user_input);
-
         let sft = SFT {
             tick: deploy_record.tick,
             amount: output.amount,
@@ -211,44 +209,31 @@ impl Inscriber {
             content: output.content,
         };
         let mint_record = MintRecord { sft };
-
         self.with_operation(Operation::Mint(mint_record))
-    }
-
-    pub fn with_split(mut self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
-        Ok(self)
     }
 
     fn with_operation(mut self, operation: Operation) -> Result<Self> {
         let inscription = operation.to_inscription();
-        self.inscriptions.push(inscription);
+        self.inscription = Some(inscription);
         Ok(self)
     }
 
-    pub fn inscribe(&self) -> Result<Vec<InscribeOutput>> {
-        let outputs: Result<Vec<InscribeOutput>, _> = self
-            .inscriptions
-            .iter()
-            .map(|inscription| self.inscribe_inner(inscription))
-            .collect();
-
-        outputs
-    }
-
-    fn inscribe_inner(&self, inscription: &Inscription) -> Result<InscribeOutput> {
+    pub fn inscribe(self) -> Result<InscribeOutput> {
         let mut utxos = self.wallet.get_unspent_outputs()?;
         let locked_utxos = self.wallet.get_locked_outputs()?;
         let runic_utxos = self.wallet.get_runic_outputs()?;
         let chain = self.wallet.chain();
         let commit_tx_change = [
-            self.wallet.get_primary_address()?,
-            self.wallet.get_primary_address()?,
+            self.wallet.get_change_address()?,
+            self.wallet.get_change_address()?,
         ];
-
         let wallet_inscriptions = self.wallet.get_inscriptions()?;
 
-        let destination = self.destination.clone();
+        let destination = self.destination;
         let satpoint = self.satpoint;
+        let inscription = self
+            .inscription
+            .ok_or_else(|| anyhow!("inscription not set"))?;
 
         let secp256k1 = Secp256k1::new();
         let key_pair = UntweakedKeyPair::new(&secp256k1, &mut rand::thread_rng());
@@ -441,7 +426,7 @@ impl Inscriber {
                 commit_tx: commit_tx.txid(),
                 reveal_tx: reveal_tx.txid(),
                 total_fees: total_fees,
-                inscription: InscriptionOrId::Inscription(inscription.clone()),
+                inscription: InscriptionOrId::Inscription(inscription),
             });
         }
 

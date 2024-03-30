@@ -22,7 +22,7 @@ Feature: Bitseed CLI integration tests
     Then sleep: "5"
 
     # deploy
-    Then cmd bitseed: "deploy --fee-rate 1 --generator {{$.generator[-1][0].inscription.Id}} --tick bits --amount 210000000000 --deploy-args {"height":{"type":"range","data":{"min":1,"max":1000}}}"
+    Then cmd bitseed: "deploy --fee-rate 1 --generator {{$.generator[-1].inscription.Id}} --tick bits --amount 210000000000 --deploy-args {"height":{"type":"range","data":{"min":1,"max":1000}}}"
     Then assert: "'{{$.deploy[-1]}}' not_contains error"
 
     # mine a block
@@ -31,7 +31,7 @@ Feature: Bitseed CLI integration tests
     Then sleep: "5"
 
     # mint 
-    Then cmd bitseed: "mint --fee-rate 1 --deploy-inscription-id {{$.deploy[-1][0].inscription.Id}} --user-input hello_bitseed" 
+    Then cmd bitseed: "mint --fee-rate 1 --deploy-inscription-id {{$.deploy[-1].inscription.Id}} --user-input hello_bitseed" 
     Then assert: "'{{$.mint[-1]}}' not_contains error"
 
     # end
