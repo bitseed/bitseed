@@ -23,26 +23,25 @@ mod wallet;
 #[command(bin_name = "bitseed")]
 pub struct BitseedCli {
     #[clap(flatten)]
-    wallet_options: wallet::WalletOption,
+    pub wallet_options: wallet::WalletOption,
     #[command(subcommand)]
-    command: Commands,
+    pub command: Commands,
 }
 
 pub trait Output: Send {
-    fn print_json(&self, minify: bool);
+    fn print_json(&self, writer: &mut dyn io::Write, minify: bool);
 }
 
 impl<T> Output for T
 where
     T: Serialize + Send,
 {
-    fn print_json(&self, minify: bool) {
+    fn print_json(&self, writer: &mut dyn io::Write, minify: bool) {
         if minify {
-            serde_json::to_writer(io::stdout(), self).ok();
+            serde_json::to_writer(writer, self).ok();
         } else {
-            serde_json::to_writer_pretty(io::stdout(), self).ok();
+            serde_json::to_writer_pretty(writer, self).ok();
         }
-        println!();
     }
 }
 
@@ -55,13 +54,13 @@ enum Commands {
     Mint(commands::mint::MintCommand),
 }
 
-pub fn run(cli: BitseedCli) -> Result<()> {
+pub fn run(cli: BitseedCli) -> SubcommandResult {
     let wallet = wallet::Wallet::new(cli.wallet_options)?;
     let output = match cli.command {
         Commands::Generator(generator) => generator.run(wallet),
         Commands::Deploy(deploy) => deploy.run(wallet),
         Commands::Mint(mint) => mint.run(wallet),
     }?;
-    output.print_json(true);
-    Ok(())
+    
+    Ok(output)
 }
