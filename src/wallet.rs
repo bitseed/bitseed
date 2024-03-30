@@ -1,4 +1,3 @@
-use crate::operation::Operation;
 use anyhow::ensure;
 use anyhow::{anyhow, bail, Result};
 use bitcoin::Address;
@@ -17,6 +16,7 @@ use reqwest::Url;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use crate::operation::Operation;
 
 #[derive(Debug, Clone, Parser)]
 pub struct WalletOption {
@@ -105,13 +105,6 @@ impl Wallet {
 
     pub fn get_locked_outputs(&self) -> Result<BTreeSet<OutPoint>> {
         self.ord_wallet.get_locked_outputs()
-    }
-
-    pub fn get_primary_address(&self) -> Result<Address> {
-        let client = self.ord_wallet.bitcoin_client().unwrap();
-        let address = client.get_new_address(None, Some(bitcoincore_rpc::json::AddressType::Bech32m))?;
-
-        address.require_network(self.chain().network()).map_err(anyhow::Error::from)
     }
 
     pub fn get_change_address(&self) -> Result<Address> {

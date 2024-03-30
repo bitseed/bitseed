@@ -1,4 +1,3 @@
-# Define the project name and source code directory
 PROJECT_NAME := bitseed
 SRC_DIR := src
 
