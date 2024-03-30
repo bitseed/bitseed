@@ -21,6 +21,10 @@ use uuid::Uuid;
 use images::bitcoin::BitcoinD;
 use images::ord::Ord;
 
+const RPC_USER: &str = "roochuser";
+const RPC_PASS: &str = "roochpass";
+const RPC_PORT: u16 = 18443;
+
 #[derive(cucumber::World, Debug)]
 struct World {
     bitcoind: Option<Container<BitcoinD>>,
@@ -54,11 +58,10 @@ async fn prepare_bitcoind_and_ord(w: &mut World) {
     let network_uuid = Uuid::new_v4();
     let network = format!("test_network_{}", network_uuid);
 
-
     let mut bitcoind_image: RunnableImage<BitcoinD> = BitcoinD::new(
-        format!("0.0.0.0:{}", bitcoind_port),
-        bitcoind_user.clone(),
-        bitcoind_pass.clone(),
+        format!("0.0.0.0:{}", RPC_PORT),
+        RPC_USER.to_string(),
+        RPC_PASS.to_string(),
     ).into();
     bitcoind_image = bitcoind_image
         .with_network(network.clone())
@@ -68,9 +71,9 @@ async fn prepare_bitcoind_and_ord(w: &mut World) {
     debug!("bitcoind ok");
 
     let mut ord_image: RunnableImage<Ord> = Ord::new(
-        format!("http://bitcoind:{}", bitcoind_port),
-        bitcoind_user.clone(),
-        bitcoind_pass.clone(),
+        format!("http://bitcoind:{}", RPC_PORT),
+        RPC_USER.to_string(),
+        RPC_PASS.to_string(),
     )
     .into();
     ord_image = ord_image.with_network(network.clone());
@@ -173,9 +176,9 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
     let mut bitseed_args = vec![
         "ord".to_string(),
         "--regtest".to_string(),
-        format!("--rpc-url={}", "http://bitcoind:18443"),
-        format!("--bitcoin-rpc-user={}", "roochuser"),
-        format!("--bitcoin-rpc-pass={}", "roochpass"),
+        format!("--rpc-url=http://bitcoind:{}", RPC_PORT),
+        format!("--bitcoin-rpc-user={}", RPC_USER),
+        format!("--bitcoin-rpc-pass={}", RPC_PASS),
     ];
 
     if w.tpl_ctx.is_none() {
@@ -304,14 +307,14 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let bitcoind = w.bitcoind.as_ref().unwrap();
     let ord = w.ord.as_ref().unwrap();
 
-    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(18443));
+    let bitcoin_rpc_url = format!("http://127.0.0.1:{}", bitcoind.get_host_port_ipv4(RPC_PORT));
     let ord_rpc_url = &format!("http://127.0.0.1:{}", ord.get_host_port_ipv4(80));
 
     let mut bitseed_args = vec![
         "--chain=regtest".to_string(),
         format!("--rpc-url={}", bitcoin_rpc_url),
-        format!("--bitcoin-rpc-user={}", "roochuser"),
-        format!("--bitcoin-rpc-pass={}", "roochpass"),
+        format!("--bitcoin-rpc-user={}", RPC_USER),
+        format!("--bitcoin-rpc-pass={}", RPC_PASS),
         format!("--server-url={}", ord_rpc_url),
     ];
 
