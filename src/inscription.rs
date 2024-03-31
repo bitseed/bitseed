@@ -3,7 +3,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Result};
 use ciborium::{value::Integer, Value};
-use ord::Inscription;
+use ord::{Inscription, InscriptionId};
 
 pub struct InscriptionBuilder {
     inscription: Inscription,
@@ -186,6 +186,21 @@ impl BitseedInscription {
             Some(Content::new(content_type.to_owned(), body.to_vec()))
         } else {
             None
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct InscriptionToBurn {
+    pub inscription_id: InscriptionId,
+    pub message: Option<String>,
+}
+
+impl InscriptionToBurn {
+    pub fn new(inscription_id: InscriptionId, message: Option<String>) -> Self {
+        Self {
+            inscription_id,
+            message,
         }
     }
 }

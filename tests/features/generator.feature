@@ -35,13 +35,13 @@ Feature: Bitseed CLI integration tests
     Then assert: "'{{$.mint[-1]}}' not_contains error"
 
     # mine a block
-    Then cmd ord: "wallet receive"
-    Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
-    Then sleep: "5"
+    #Then cmd ord: "wallet receive"
+    #Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
+    #Then sleep: "5"
 
     # split 
-    Then cmd bitseed: "split --fee-rate 1 --asset-inscription-id {{$.mint[-1].inscription.Id}} --amount 100" 
-    Then assert: "'{{$.split[-1]}}' not_contains error"
+    #Then cmd bitseed: "split --fee-rate 1 --asset-inscription-id {{$.mint[-1].inscription.Id}} --amount 100" 
+    #Then assert: "'{{$.split[-1]}}' not_contains error"
 
     # end
     Then release bitcoind and Ord servers

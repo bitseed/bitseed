@@ -1,12 +1,11 @@
-use crate::commands::mint;
-
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
-        operation::{DeployRecord, MintRecord, Operation},
+        operation::{DeployRecord, MintRecord, SplitRecord, Operation},
         sft::{Content, SFT},
         wallet::Wallet,
         GENERATOR_TICK,
+        inscription::InscriptionToBurn,
     },
     anyhow::{anyhow, bail, ensure, Result, Error},
     bitcoin::{
@@ -15,9 +14,9 @@ use {
         blockdata::{opcodes, script},
         key::{TapTweak, TweakedKeyPair, TweakedPublicKey, UntweakedKeyPair},
         policy::MAX_STANDARD_TX_WEIGHT,
-        secp256k1::{self, constants::SCHNORR_SIGNATURE_SIZE, rand, Secp256k1, XOnlyPublicKey},
+        secp256k1::{self, constants::SCHNORR_SIGNATURE_SIZE, rand, Secp256k1, XOnlyPublicKey, All},
         sighash::{Prevouts, SighashCache, TapSighashType},
-        taproot::{ControlBlock, LeafVersion, Signature, TapLeafHash, TaprootBuilder},
+        taproot::{ControlBlock, LeafVersion, Signature, TapLeafHash, TaprootBuilder, TaprootSpendInfo},
         Address, Amount, OutPoint, PrivateKey, Script, ScriptBuf, Sequence, Transaction, TxIn,
         TxOut, Txid, Witness,
     },
@@ -88,18 +87,30 @@ pub enum InscriptionOrId {
     Id(InscriptionId),
 }
 
+#[derive(Debug, Clone)]
+pub struct InscribeContext {
+    pub commit_tx: Transaction,
+    pub reveal_tx: Transaction,
+
+    pub reveal_scripts: Vec<ScriptBuf>,
+    pub control_blocks: Vec<ControlBlock>,
+    pub taproot_spend_infos: Vec<TaprootSpendInfo>,
+    pub commit_tx_addresses: Vec<Address>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InscribeOutput {
     commit_tx: Txid,
     reveal_tx: Txid,
     total_fees: u64,
-    inscription: InscriptionOrId,
+    inscriptions: Vec<InscriptionOrId>,
 }
 
 pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
     inscriptions: Vec<Inscription>,
+    inscriptions_to_burn: Vec<InscriptionToBurn>,
     satpoint: SatPoint,
     destination: Address,
 }
@@ -129,6 +140,7 @@ impl Inscriber {
             wallet,
             option,
             inscriptions: Vec::new(),
+            inscriptions_to_burn: Vec::new(),
             satpoint,
             destination,
         })
@@ -152,7 +164,7 @@ impl Inscriber {
                 content: Some(content),
             },
         };
-        self.with_operation(Operation::Mint(mint_record))
+        Ok(self.with_operation(Operation::Mint(mint_record)))
     }
 
     pub fn with_deploy(
@@ -171,7 +183,7 @@ impl Inscriber {
             repeat,
             deploy_args,
         };
-        self.with_operation(Operation::Deploy(deploy_record))
+        Ok(self.with_operation(Operation::Deploy(deploy_record)))
     }
 
     pub fn with_mint(
@@ -214,7 +226,7 @@ impl Inscriber {
         };
         let mint_record = MintRecord { sft };
 
-        self.with_operation(Operation::Mint(mint_record))
+        Ok(self.with_operation(Operation::Mint(mint_record)))
     }
 
     pub fn with_split(self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
@@ -248,19 +260,26 @@ impl Inscriber {
             content: sft_c.content,
         };
 
-        let mint_record_a = MintRecord { sft: sft_a };
-        let result = self.with_operation(Operation::Mint(mint_record_a));
+        let result = self.with_burn(asset_inscription_id, Some("split_SFT".to_string()));
 
-        let mint_record_b = MintRecord { sft: sft_b };
-        let result = result.unwrap().with_operation(Operation::Mint(mint_record_b));
+        let split_record_a = SplitRecord { sft: sft_a };
+        let result = result.with_operation(Operation::Split(split_record_a));
 
-        result
+        let split_record_b = SplitRecord { sft: sft_b };
+        let result = result.with_operation(Operation::Split(split_record_b));
+
+        Ok(result)
     }
 
-    fn with_operation(mut self, operation: Operation) -> Result<Self> {
+    pub fn with_burn(mut self, inscription_id: InscriptionId, message: Option<String>) -> Self {
+        self.inscriptions_to_burn.push(InscriptionToBurn::new(inscription_id, message));
+        self
+    }
+
+    fn with_operation(mut self, operation: Operation) -> Self {
         let inscription = operation.to_inscription();
         self.inscriptions.push(inscription);
-        Ok(self)
+        self
     }
 
     pub fn inscribes(&self) -> Result<Vec<InscribeOutput>> {
@@ -294,8 +313,8 @@ impl Inscriber {
         let runic_utxos = self.wallet.get_runic_outputs()?;
         let chain = self.wallet.chain();
         let commit_tx_change = [
-            self.wallet.get_primary_address()?,
-            self.wallet.get_primary_address()?,
+            self.wallet.get_change_address()?,
+            self.wallet.get_change_address()?,
         ];
 
         let wallet_inscriptions = self.wallet.get_inscriptions()?;
@@ -332,26 +351,6 @@ impl Inscriber {
 
         let mut reveal_inputs = Vec::new();
         let mut reveal_outputs = Vec::new();
-
-        // if let Some(ParentInfo {
-        //     location,
-        //     id: _,
-        //     destination,
-        //     tx_out,
-        // }) = self.parent_info.clone()
-        // {
-        //     reveal_inputs.push(location.outpoint);
-        //     reveal_outputs.push(TxOut {
-        //         script_pubkey: destination.script_pubkey(),
-        //         value: tx_out.value,
-        //     });
-        // }
-
-        // if self.mode == Mode::SatPoints {
-        //     for (satpoint, _txout) in self.reveal_satpoints.iter() {
-        //         reveal_inputs.push(satpoint.outpoint);
-        //     }
-        // }
 
         reveal_inputs.push(OutPoint::null());
 
@@ -415,16 +414,6 @@ impl Inscriber {
         }
 
         let mut prevouts = Vec::new();
-
-        // if let Some(parent_info) = self.parent_info.clone() {
-        //     prevouts.push(parent_info.tx_out);
-        // }
-
-        // if self.mode == Mode::SatPoints {
-        //     for (_satpoint, txout) in self.reveal_satpoints.iter() {
-        //         prevouts.push(txout.clone());
-        //     }
-        // }
 
         prevouts.push(commit_tx.output[vout].clone());
 
@@ -494,7 +483,7 @@ impl Inscriber {
                 commit_tx: commit_tx.txid(),
                 reveal_tx: reveal_tx.txid(),
                 total_fees: total_fees,
-                inscription: InscriptionOrId::Inscription(inscription.clone()),
+                inscriptions: vec!(InscriptionOrId::Inscription(inscription.clone())),
             });
         }
 
@@ -552,7 +541,7 @@ impl Inscriber {
             commit_tx: commit,
             reveal_tx: reveal,
             total_fees: total_fees,
-            inscription: InscriptionOrId::Id(inscription_id),
+            inscriptions: vec!(InscriptionOrId::Id(inscription_id)),
         })
     }
 
@@ -640,5 +629,170 @@ impl Inscriber {
             .sum::<u64>()
             .checked_sub(tx.output.iter().map(|txout| txout.value).sum::<u64>())
             .unwrap()
+    }
+
+    fn create_reveal_script_and_control_block(
+        inscription: &Inscription,
+        secp256k1: &Secp256k1<All>,
+    ) -> Result<(ScriptBuf, ControlBlock, TaprootSpendInfo)> {
+        let key_pair = UntweakedKeyPair::new(secp256k1, &mut rand::thread_rng());
+        let (public_key, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
+    
+        let reveal_script = inscription
+            .append_reveal_script_to_builder(
+                ScriptBuf::builder()
+                    .push_slice(public_key.serialize())
+                    .push_opcode(opcodes::all::OP_CHECKSIG),
+            )
+            .into_script();
+    
+        let taproot_spend_info = TaprootBuilder::new()
+            .add_leaf(0, reveal_script.clone())
+            .expect("adding leaf should work")
+            .finalize(secp256k1, public_key)
+            .expect("finalizing taproot builder should work");
+    
+        let control_block = taproot_spend_info
+            .control_block(&(reveal_script.clone(), LeafVersion::TapScript))
+            .expect("should compute control block");
+    
+        Ok((reveal_script, control_block, taproot_spend_info))
+    }
+
+    fn prepare_context(&self) -> InscribeContext {
+        let commit_tx = Transaction {
+            input: Vec::new(),
+            output: Vec::new(),
+            lock_time: LockTime::ZERO,
+            version: 2,
+        };
+
+        let reveal_tx = Transaction {
+            input: Vec::new(),
+            output: Vec::new(),
+            lock_time: LockTime::ZERO,
+            version: 2,
+        };
+
+        InscribeContext {
+            commit_tx,
+            reveal_tx,
+            reveal_scripts: Vec::new(),
+            control_blocks: Vec::new(),
+            taproot_spend_infos: Vec::new(),
+            commit_tx_addresses: Vec::new(),
+        }
+    }
+
+    fn output(&self, ctx: &mut InscribeContext) -> InscribeOutput {
+        InscribeOutput {
+            commit_tx: ctx.commit_tx.txid(),
+            reveal_tx: ctx.reveal_tx.txid(),
+            total_fees: 0,
+            inscriptions: vec!(),
+        }
+    }
+
+    fn build_commit(&self, ctx: &mut InscribeContext) -> Result<()> {
+        let mut total_postage = 0;
+        let secp256k1 = Secp256k1::new();
+    
+        for inscription in &self.inscriptions {
+            let (reveal_script, control_block, taproot_spend_info) =
+                Self::create_reveal_script_and_control_block(inscription, &secp256k1)?;
+    
+            let commit_tx_address =
+                Address::p2tr_tweaked(taproot_spend_info.output_key(), self.wallet.chain().network());
+    
+            let commit_tx_output = TxOut {
+                script_pubkey: commit_tx_address.script_pubkey(),
+                value: 0,
+            };
+    
+            ctx.commit_tx.output.push(commit_tx_output);
+            total_postage += self.option.postage().to_sat();
+    
+            ctx.reveal_scripts.push(reveal_script);
+            ctx.control_blocks.push(control_block);
+            ctx.taproot_spend_infos.push(taproot_spend_info);
+            ctx.commit_tx_addresses.push(commit_tx_address);
+        }
+    
+        let target = Target::Value(Amount::from_sat(total_postage));
+    
+        let mut selected_utxos = Vec::new();
+        let mut total_input_value = 0;
+    
+        let unspent_outputs = self.wallet.get_unspent_outputs()?;
+        let locked_outputs = self.wallet.get_locked_outputs()?;
+        let runic_outputs = self.wallet.get_runic_outputs()?;
+    
+        for (outpoint, utxo) in unspent_outputs.iter() {
+            if !locked_outputs.contains(outpoint) && !runic_outputs.contains(outpoint) {
+                selected_utxos.push((*outpoint, utxo.clone()));
+                total_input_value += utxo.value;
+    
+                if total_input_value >= target.value().to_sat() {
+                    break;
+                }
+            }
+        }
+    
+        ensure!(
+            total_input_value >= target.value().to_sat(),
+            "Insufficient funds in wallet"
+        );
+    
+        for (outpoint, _) in &selected_utxos {
+            ctx.commit_tx.input.push(TxIn {
+                previous_output: *outpoint,
+                script_sig: Script::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::new(),
+            });
+        }
+    
+        let mut total_output_value = 0;
+        for output in &ctx.commit_tx.output {
+            total_output_value += output.value;
+        }
+    
+        let change_value = total_input_value - total_output_value - self.option.commit_fee_rate().fee(ctx.commit_tx.vsize()).to_sat();
+    
+        if change_value > 0 {
+            ctx.commit_tx.output.push(TxOut {
+                script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
+                value: change_value,
+            });
+        }
+    
+        for (outpoint, _) in &selected_utxos {
+            self.wallet.lock_output(outpoint)?;
+        }
+    
+        Ok(())
+    }
+
+    fn build_revert(&self, ctx: &mut InscribeContext) -> Result<()> {
+        Ok(())
+    }
+
+    fn sign(&self, ctx: &mut InscribeContext) -> Result<()> {
+        Ok(())
+    }
+
+    fn boardcaset_tx(&self, ctx: &mut InscribeContext) -> Result<()> {
+        Ok(())
+    }
+
+    pub fn inscribe_v2(&self) -> Result<InscribeOutput> {
+        let mut ctx = self.prepare_context();
+
+        self.build_commit(&mut ctx)?;
+        self.build_revert(&mut ctx)?;
+        self.sign(&mut ctx)?;
+        self.boardcaset_tx(&mut ctx)?;
+
+        Ok(self.output(&mut ctx))
     }
 }

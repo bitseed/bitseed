@@ -103,11 +103,31 @@ impl Operation {
                 }
                 builder.finish()
             }
-            Operation::Split(_record) => {
-                todo!()
+            Operation::Split(record) => {
+                let mut builder = InscriptionBuilder::new()
+                    .op(op.clone())
+                    .tick(record.sft.tick.clone())
+                    .amount(record.sft.amount);
+                if let Some(attributes) = record.sft.attributes {
+                    builder = builder.attributes(attributes);
+                }
+                if let Some(content) = record.sft.content {
+                    builder = builder.content(content)
+                }
+                builder.finish()
             }
-            Operation::Merge(_record) => {
-                todo!()
+            Operation::Merge(record) => {
+                let mut builder = InscriptionBuilder::new()
+                    .op(op.clone())
+                    .tick(record.sft.tick.clone())
+                    .amount(record.sft.amount);
+                if let Some(attributes) = record.sft.attributes {
+                    builder = builder.attributes(attributes);
+                }
+                if let Some(content) = record.sft.content {
+                    builder = builder.content(content)
+                }
+                builder.finish()
             }
         }
     }
