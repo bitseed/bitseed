@@ -103,7 +103,7 @@ pub struct InscribeContext {
     pub utxos: BTreeMap<OutPoint, TxOut>,
     pub reveal_scripts_to_sign: Vec<ScriptBuf>,
     pub control_blocks_to_sign: Vec<ControlBlock>,
-    pub commit_input_index: Option<usize>,
+    pub commit_input_start_index: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -736,13 +736,21 @@ impl Inscriber {
             utxos,
             reveal_scripts_to_sign: Vec::new(),
             control_blocks_to_sign: Vec::new(),
-            commit_input_index: None,
+            commit_input_start_index: None,
         })
     }
 
     fn build_commit(&self, ctx: &mut InscribeContext) -> Result<()> {
         let secp256k1 = Secp256k1::new();
     
+        // set satpoint
+        ctx.commit_tx.input.push(TxIn {
+            previous_output: self.satpoint.outpoint,
+            script_sig: ScriptBuf::new(),
+            sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+            witness: Witness::new(),
+        });
+
         for inscription in &self.inscriptions {
             let (key_pair, reveal_script, control_block, taproot_spend_info) =
                 Self::create_reveal_script_and_control_block(inscription, &secp256k1)?;
@@ -791,7 +799,7 @@ impl Inscriber {
         }
 
         // Process the logic of inscription revelation
-        let commit_input_index = ctx.reveal_tx.input.len();
+        let commit_input_start_index = ctx.reveal_tx.input.len();
 
         for (index, ((_, control_block), reveal_script)) in ctx
             .commit_tx_addresses
@@ -826,27 +834,7 @@ impl Inscriber {
         }
 
         // Set the commit input index in the context
-        ctx.commit_input_index = Some(commit_input_index);
-
-        // Add change output if necessary
-        let total_input_value: u64 = ctx.reveal_tx.input.iter().map(|input| {
-            ctx.utxos
-                .get(&input.previous_output)
-                .map(|utxo| utxo.value)
-                .unwrap_or(0)
-        }).sum();
-
-        let total_output_value: u64 = ctx.reveal_tx.output.iter().map(|output| output.value).sum();
-
-        let change_value = total_input_value - total_output_value - self.option.reveal_fee_rate().fee(ctx.reveal_tx.vsize()).to_sat();
-
-        if change_value > 0 {
-            let change_output = TxOut {
-                script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
-                value: change_value,
-            };
-            ctx.reveal_tx.output.push(change_output);
-        }
+        ctx.commit_input_start_index = Some(commit_input_start_index);
 
         Ok(())
     }
@@ -864,20 +852,37 @@ impl Inscriber {
         }
     
         let mut reveal_additional_fee = 0;
-        let mut reveal_change_fee = 0;
+        let mut reveal_change_value = 0;
 
         if total_burn_postage < actual_reveal_fee + total_new_postage {
             reveal_additional_fee = actual_reveal_fee + total_new_postage - total_burn_postage;
         } else {
-            reveal_change_fee = total_burn_postage - actual_reveal_fee - total_new_postage;
+            reveal_change_value = total_burn_postage - actual_reveal_fee - total_new_postage;
         }
     
-        if reveal_change_fee > 0 {
+        let dust_threshold = self.destination.script_pubkey().dust_value().to_sat();
+
+        if reveal_change_value > dust_threshold {
             let change_output = TxOut {
                 script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
-                value: reveal_change_fee,
+                value: reveal_change_value,
             };
             ctx.reveal_tx.output.push(change_output);
+    
+            // Recalculate the actual reveal fee, considering the impact of the change output
+            let new_reveal_fee = self.option.reveal_fee_rate().fee(ctx.reveal_tx.vsize()).to_sat();
+    
+            // Adjust the change amount to compensate for the fee change
+            let fee_difference = new_reveal_fee - actual_reveal_fee;
+            reveal_change_value -= fee_difference;
+    
+            if reveal_change_value <= dust_threshold {
+                // If the adjusted change amount is less than or equal to the dust threshold, remove the change output
+                ctx.reveal_tx.output.pop();
+            } else {
+                // Update the amount of the change output
+                ctx.reveal_tx.output.last_mut().unwrap().value = reveal_change_value;
+            }
         }
 
         if reveal_additional_fee > 0 {
@@ -885,31 +890,34 @@ impl Inscriber {
             output.value = reveal_additional_fee;
         }
 
-        let commit_vsize = ctx.commit_tx.vsize();
-        let commit_fee:i64 = (self.option.commit_fee_rate().fee(commit_vsize).to_sat() + reveal_additional_fee).try_into().expect("fee to i64 fail");
+        // Check if recharge is required
+        let mut commit_fee:i64 = self.option.commit_fee_rate().fee(ctx.commit_tx.vsize()).to_sat() as i64;
+        let mut change_value = commit_fee + Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64;
     
-        let mut total_commit_output_value: i64 = 0;
-        for output in &ctx.commit_tx.output {
-            total_commit_output_value += output.value as i64;
+        if change_value < 0 {
+            let additional_inputs = self.select_additional_inputs(ctx, (0 - change_value) as u64)?;
+            for input in additional_inputs {
+                ctx.commit_tx.input.push(input);
+            }
         }
-    
-        let mut total_commit_input_value: i64 = 0;
-        for input in &ctx.commit_tx.input {
-            let prevout = input.previous_output;
-            let utxo = ctx.utxos.get(&prevout).expect("utxo not found");
-            total_commit_input_value += utxo.value as i64;
-        }
-    
-        let change_value = total_commit_input_value - total_commit_output_value - commit_fee;
-    
+
+        // Check if change is needed
+        commit_fee = self.option.commit_fee_rate().fee(ctx.commit_tx.vsize()).to_sat() as i64;
+        change_value = commit_fee + Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64;
+
         if change_value > 0 {
             ctx.commit_tx.output.push(TxOut {
                 script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
                 value: change_value as u64,
             });
-        } else if change_value < 0 {
-            let additional_inputs = self.select_additional_inputs(ctx, (0 - change_value) as u64)?;
-            ctx.commit_tx.input.extend(additional_inputs);
+        }
+
+         // Update the reveal transaction inputs to reference the new commit transaction outputs
+         let new_commit_txid = ctx.commit_tx.txid();
+         for (index, input) in ctx.reveal_tx.input.iter_mut().enumerate() {
+            if index >= ctx.commit_input_start_index.unwrap() {
+                input.previous_output.txid = new_commit_txid;
+            }
         }
 
         Ok(())
@@ -932,7 +940,7 @@ impl Inscriber {
             .zip(ctx.key_pairs.iter())
             .enumerate()
         {
-            let commit_input_start_index = ctx.commit_input_index.expect("commit input index should be set");
+            let commit_input_start_index = ctx.commit_input_start_index.expect("commit input index should be set");
             let prevouts = Prevouts::All(&ctx.commit_tx.output);
 
             let sighash = sighash_cache

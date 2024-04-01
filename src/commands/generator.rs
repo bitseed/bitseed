@@ -20,7 +20,7 @@ impl GeneratorCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
         let output = Inscriber::new(wallet, self.inscribe_options)?
             .with_generator(self.name, self.generator)?
-            .inscribe()?;
+            .inscribe_v2()?;
 
         Ok(Box::new(output))
     }
