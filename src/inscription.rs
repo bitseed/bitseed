@@ -193,11 +193,11 @@ impl BitseedInscription {
 #[derive(Debug, Clone)]
 pub struct InscriptionToBurn {
     pub inscription_id: InscriptionId,
-    pub message: Option<String>,
+    pub message: String,
 }
 
 impl InscriptionToBurn {
-    pub fn new(inscription_id: InscriptionId, message: Option<String>) -> Self {
+    pub fn new(inscription_id: InscriptionId, message: String) -> Self {
         Self {
             inscription_id,
             message,
