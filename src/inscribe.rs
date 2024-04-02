@@ -983,8 +983,21 @@ impl Inscriber {
         }
 
         if reveal_additional_fee > 0 {
-            let output = ctx.commit_tx.output.first_mut().expect("the first output should one inscribe");
-            output.value = reveal_additional_fee;
+            let mut remaining_fee = reveal_additional_fee;
+
+            for output in ctx.commit_tx.output.iter_mut() {
+                if output.value < dust_threshold {
+                    let additional_value = dust_threshold - output.value;
+                    output.value += additional_value;
+                    remaining_fee -= additional_value;
+                }
+            }
+
+            // If there's still remaining fee, add it to the last output
+            if remaining_fee > 0 {
+                let last_output = ctx.commit_tx.output.last_mut().expect("there should be at least one output");
+                last_output.value += remaining_fee;
+            }
         }
 
         // Check if recharge is required
@@ -1054,10 +1067,9 @@ impl Inscriber {
 
         // Sign the inputs for inscription revelation
         let commit_input_start_index = ctx.commit_input_start_index.unwrap();
-        let reveal_input_count = ctx.reveal_scripts_to_sign.len();
 
-        let prevouts: Vec<_> = (commit_input_start_index..commit_input_start_index + reveal_input_count)
-            .map(|index| &ctx.commit_tx.output[index])
+        let prevouts: Vec<_> = ctx.reveal_tx.input.iter()
+            .map(|tx_in| ctx.utxos.get(&tx_in.previous_output).clone().expect("prevout not found"))
             .collect();
 
         let mut sighash_cache = SighashCache::new(&mut ctx.reveal_tx);
@@ -1129,13 +1141,19 @@ impl Inscriber {
 
     fn boardcaset_tx(&self, ctx: &mut InscribeContext) -> Result<InscribeOutput> {
         let bitcoin_client = self.wallet.bitcoin_client()?;
-        let commit_txid = bitcoin_client.send_raw_transaction(&ctx.signed_commit_tx_hex)?;
+        let commit_txid = match bitcoin_client.send_raw_transaction(&ctx.signed_commit_tx_hex) {
+            Ok(txid) => txid,
+            Err(err) => {
+              return Err(anyhow!("Failed to send commit transaction: {err}"))
+            }
+        };
+
         let reveal_txid = match bitcoin_client.send_raw_transaction(&ctx.signed_reveal_tx_hex) {
             Ok(txid) => txid,
             Err(err) => {
-              return Err(anyhow!(
-              "Failed to send reveal transaction: {err}\nCommit tx {commit_txid} will be recovered once mined"
-            ))
+                return Err(anyhow!(
+                "Failed to send reveal transaction: {err}\nCommit tx {commit_txid} will be recovered once mined"
+                ))
             }
         };
 

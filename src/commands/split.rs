@@ -21,7 +21,7 @@ impl SplitCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
         let output = Inscriber::new(wallet, self.inscribe_options)?
             .with_split(self.asset_inscription_id, self.amount)?
-            .inscribe()?;
+            .inscribe_v2()?;
         Ok(Box::new(output))
     }
 }
