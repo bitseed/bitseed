@@ -124,6 +124,8 @@ pub struct Inscriber {
 }
 
 impl Inscriber {
+    const SCHNORR_SIGNATURE_SIZE: usize = 64;
+    
     pub fn new(wallet: Wallet, option: InscribeOptions) -> Result<Self> {
         let destination = match option.destination.clone() {
             Some(destination) => destination.require_network(wallet.chain().network())?,
@@ -704,6 +706,83 @@ impl Inscriber {
         Ok(additional_inputs)
     }
 
+    fn estimate_commit_tx_fee(&self, ctx: &InscribeContext) -> u64 {
+        let input_count = ctx.commit_tx.input.len();
+        let output_count = ctx.commit_tx.output.len();
+    
+        let mut estimated_commit_tx = Transaction {
+            version: 2,
+            lock_time: LockTime::ZERO,
+            input: (0..input_count)
+                .map(|_| TxIn {
+                    previous_output: OutPoint::null(),
+                    script_sig: ScriptBuf::new(),
+                    sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
+                    witness: Witness::from_slice(&[&[0; Self::SCHNORR_SIGNATURE_SIZE]]),
+                })
+                .collect(),
+            output: (0..output_count)
+                .map(|_| TxOut {
+                    value: 0,
+                    script_pubkey: ScriptBuf::new(),
+                })
+                .collect(),
+        };
+    
+        for (index, output) in ctx.commit_tx.output.iter().enumerate() {
+            estimated_commit_tx.output[index].script_pubkey = output.script_pubkey.clone();
+        }
+    
+        self.option.commit_fee_rate().fee(estimated_commit_tx.size()).to_sat()
+    }
+
+    fn estimate_reveal_tx_fee(
+        &self,
+        ctx: &InscribeContext,
+        reveal_scripts: &Vec<ScriptBuf>,
+        control_blocks: &Vec<ControlBlock>,
+    ) -> u64 {
+        let mut reveal_tx = ctx.reveal_tx.clone();
+        let commit_input_start_index = ctx.commit_input_start_index.unwrap_or(0);
+    
+        for (current_index, txin) in reveal_tx.input.iter_mut().enumerate() {
+            if current_index >= commit_input_start_index {
+                let reveal_script = &reveal_scripts[current_index - commit_input_start_index];
+                let control_block = &control_blocks[current_index - commit_input_start_index];
+    
+                txin.witness.push(
+                    Signature::from_slice(&[0; SCHNORR_SIGNATURE_SIZE])
+                        .unwrap()
+                        .to_vec(),
+                );
+                txin.witness.push(reveal_script);
+                txin.witness.push(&control_block.serialize());
+            } else {
+                // For inputs related to inscription destruction
+                txin.witness.push(
+                    Signature::from_slice(&[0; SCHNORR_SIGNATURE_SIZE])
+                        .unwrap()
+                        .to_vec(),
+                );
+                txin.witness.push(&[0; 33]); // Placeholder for public key
+            }
+        }
+    
+        self.option.reveal_fee_rate().fee(reveal_tx.size()).to_sat()
+    }
+
+    fn assert_commit_transaction_balance(&self, ctx: &InscribeContext, tx: &Transaction, utxos: &BTreeMap<OutPoint, TxOut>, msg: &str) {
+        let total_input: u64 = tx.input.iter().map(|input| {
+            utxos.get(&input.previous_output).unwrap().value
+        }).sum();
+    
+        let total_output: u64 = tx.output.iter().map(|output| output.value).sum();
+    
+        let fee = self.estimate_commit_tx_fee(ctx);
+    
+        assert_eq!(total_input, total_output + fee, "{}", msg);
+    }
+
     fn prepare_context(&self) -> Result<InscribeContext> {
         let commit_tx = Transaction {
             input: Vec::new(),
@@ -840,7 +919,7 @@ impl Inscriber {
     }
 
     fn update_fees(&self, ctx: &mut InscribeContext) -> Result<()> {
-        let actual_reveal_fee = self.option.reveal_fee_rate().fee(ctx.reveal_tx.vsize()).to_sat();
+        let actual_reveal_fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
         let total_new_postage = self.option.postage().to_sat() * self.inscriptions.len() as u64;
     
         let mut total_burn_postage = 0;
@@ -870,7 +949,7 @@ impl Inscriber {
             ctx.reveal_tx.output.push(change_output);
     
             // Recalculate the actual reveal fee, considering the impact of the change output
-            let new_reveal_fee = self.option.reveal_fee_rate().fee(ctx.reveal_tx.vsize()).to_sat();
+            let new_reveal_fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
     
             // Adjust the change amount to compensate for the fee change
             let fee_difference = new_reveal_fee - actual_reveal_fee;
@@ -891,8 +970,8 @@ impl Inscriber {
         }
 
         // Check if recharge is required
-        let mut commit_fee:i64 = self.option.commit_fee_rate().fee(ctx.commit_tx.vsize()).to_sat() as i64;
-        let mut change_value = commit_fee + Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64;
+        let mut commit_fee:i64 = self.estimate_commit_tx_fee(ctx) as i64;
+        let mut change_value = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64 - commit_fee;
     
         if change_value < 0 {
             let additional_inputs = self.select_additional_inputs(ctx, (0 - change_value) as u64)?;
@@ -902,23 +981,41 @@ impl Inscriber {
         }
 
         // Check if change is needed
-        commit_fee = self.option.commit_fee_rate().fee(ctx.commit_tx.vsize()).to_sat() as i64;
-        change_value = commit_fee + Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64;
+        commit_fee = self.estimate_commit_tx_fee(ctx) as i64;
+        change_value = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) as i64 - commit_fee;
 
-        if change_value > 0 {
+        if change_value > dust_threshold as i64 {
             ctx.commit_tx.output.push(TxOut {
                 script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
                 value: change_value as u64,
             });
+
+            // Recalculate the actual commit fee, considering the impact of the change output
+            let new_commit_fee = self.estimate_commit_tx_fee(ctx) as i64;
+
+            // Adjust the change amount to compensate for the fee change
+            let fee_difference = new_commit_fee - commit_fee;
+            change_value -= fee_difference as i64;
+    
+            if change_value <= dust_threshold as i64 {
+                // If the adjusted change amount is less than or equal to the dust threshold, remove the change output
+                ctx.commit_tx.output.pop();
+            } else {
+                // Update the amount of the change output
+                ctx.commit_tx.output.last_mut().unwrap().value = change_value as u64;
+            }
         }
 
-         // Update the reveal transaction inputs to reference the new commit transaction outputs
-         let new_commit_txid = ctx.commit_tx.txid();
-         for (index, input) in ctx.reveal_tx.input.iter_mut().enumerate() {
+        // Update the reveal transaction inputs to reference the new commit transaction outputs
+        let new_commit_txid = ctx.commit_tx.txid();
+        for (index, input) in ctx.reveal_tx.input.iter_mut().enumerate() {
             if index >= ctx.commit_input_start_index.unwrap() {
                 input.previous_output.txid = new_commit_txid;
             }
         }
+
+        // Check commit fee
+        self.assert_commit_transaction_balance(ctx, &ctx.commit_tx, &ctx.utxos,  "commit transaction input, output, and fee do not match");
 
         Ok(())
     }
