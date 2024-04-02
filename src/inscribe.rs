@@ -932,6 +932,13 @@ impl Inscriber {
             .hex;
 
         // Sign the inputs for inscription revelation
+        let commit_input_start_index = ctx.commit_input_start_index.unwrap();
+        let reveal_input_count = ctx.reveal_scripts_to_sign.len();
+
+        let prevouts: Vec<_> = (commit_input_start_index..commit_input_start_index + reveal_input_count)
+            .map(|index| &ctx.commit_tx.output[index])
+            .collect();
+
         let mut sighash_cache = SighashCache::new(&mut ctx.reveal_tx);
         for (index, ((reveal_script, control_block), keypair)) in ctx
             .reveal_scripts_to_sign
@@ -940,22 +947,18 @@ impl Inscriber {
             .zip(ctx.key_pairs.iter())
             .enumerate()
         {
-            let commit_input_start_index = ctx.commit_input_start_index.expect("commit input index should be set");
-            let prevouts = Prevouts::All(&ctx.commit_tx.output);
-
             let sighash = sighash_cache
                 .taproot_script_spend_signature_hash(
                     commit_input_start_index + index,
-                    &prevouts,
+                    &Prevouts::All(&prevouts),
                     TapLeafHash::from_script(reveal_script, LeafVersion::TapScript),
-                    TapSighashType::Default,
+                    TapSighashType::All,
                 )
                 .expect("failed to compute sighash");
 
             let secp = Secp256k1::new();
             let message = secp256k1::Message::from_slice(sighash.as_ref()).expect("failed to create message");
             let sig = secp.sign_schnorr(&message, &keypair);
-
 
             let witness = sighash_cache
                 .witness_mut(commit_input_start_index + index)
