@@ -7,7 +7,7 @@ use {
         GENERATOR_TICK,
         inscription::InscriptionToBurn,
     },
-    anyhow::{anyhow, bail, ensure, Result, Error},
+    anyhow::{anyhow, bail, ensure, Result},
     bitcoin::{
         absolute::LockTime,
         address::NetworkUnchecked,
@@ -771,7 +771,10 @@ impl Inscriber {
         self.option.reveal_fee_rate().fee(reveal_tx.size()).to_sat()
     }
 
-    fn assert_commit_transaction_balance(&self, ctx: &InscribeContext, tx: &Transaction, utxos: &BTreeMap<OutPoint, TxOut>, msg: &str) {
+    fn assert_commit_transaction_balance(&self, ctx: &InscribeContext, msg: &str) {
+        let tx = &ctx.commit_tx;
+        let utxos = &ctx.utxos;
+
         let total_input: u64 = tx.input.iter().map(|input| {
             utxos.get(&input.previous_output).unwrap().value
         }).sum();
@@ -779,6 +782,21 @@ impl Inscriber {
         let total_output: u64 = tx.output.iter().map(|output| output.value).sum();
     
         let fee = self.estimate_commit_tx_fee(ctx);
+    
+        assert_eq!(total_input, total_output + fee, "{}", msg);
+    }
+
+    fn assert_reveal_transaction_balance(&self, ctx: &InscribeContext, msg: &str) {
+        let tx = &ctx.reveal_tx;
+        let utxos = &ctx.utxos;
+
+        let total_input: u64 = tx.input.iter().map(|input| {
+            utxos.get(&input.previous_output).unwrap().value
+        }).sum();
+    
+        let total_output: u64 = tx.output.iter().map(|output| output.value).sum();
+    
+        let fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
     
         assert_eq!(total_input, total_output + fee, "{}", msg);
     }
@@ -1011,11 +1029,17 @@ impl Inscriber {
         for (index, input) in ctx.reveal_tx.input.iter_mut().enumerate() {
             if index >= ctx.commit_input_start_index.unwrap() {
                 input.previous_output.txid = new_commit_txid;
+                
+                ctx.utxos.insert(
+                    input.previous_output,
+                    ctx.commit_tx.output[input.previous_output.vout as usize].clone(),
+                );
             }
         }
 
         // Check commit fee
-        self.assert_commit_transaction_balance(ctx, &ctx.commit_tx, &ctx.utxos,  "commit transaction input, output, and fee do not match");
+        self.assert_commit_transaction_balance(ctx, "commit transaction input, output, and fee do not match");
+        self.assert_reveal_transaction_balance(ctx, "reveal transaction input, output, and fee do not match");
 
         Ok(())
     }
@@ -1049,7 +1073,7 @@ impl Inscriber {
                     commit_input_start_index + index,
                     &Prevouts::All(&prevouts),
                     TapLeafHash::from_script(reveal_script, LeafVersion::TapScript),
-                    TapSighashType::All,
+                    TapSighashType::Default,
                 )
                 .expect("failed to compute sighash");
 
@@ -1105,7 +1129,6 @@ impl Inscriber {
 
     fn boardcaset_tx(&self, ctx: &mut InscribeContext) -> Result<InscribeOutput> {
         let bitcoin_client = self.wallet.bitcoin_client()?;
-
         let commit_txid = bitcoin_client.send_raw_transaction(&ctx.signed_commit_tx_hex)?;
         let reveal_txid = match bitcoin_client.send_raw_transaction(&ctx.signed_reveal_tx_hex) {
             Ok(txid) => txid,
@@ -1116,11 +1139,24 @@ impl Inscriber {
             }
         };
 
+        let total_fees = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) + Self::calculate_fee(&ctx.reveal_tx, &ctx.utxos);
+
+        let commit_input_start_index = ctx.commit_input_start_index.unwrap();
+        let reveal_input_count = ctx.reveal_scripts_to_sign.len();
+
+        let inscriptions: Vec<_> = (commit_input_start_index..commit_input_start_index + reveal_input_count)
+            .map(|index| InscriptionId {
+                txid: reveal_txid,
+                index: index as u32,
+            })
+            .map(|ins_id| InscriptionOrId::Id(ins_id))
+            .collect();
+
         Ok(InscribeOutput {
             commit_tx: commit_txid,
             reveal_tx: reveal_txid,
-            total_fees: 0,
-            inscriptions: vec!(),
+            total_fees,
+            inscriptions,
         })
     }
 
