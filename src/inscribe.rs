@@ -23,6 +23,7 @@ use {
     bitcoincore_rpc::{
         bitcoincore_rpc_json::{ImportDescriptors, SignRawTransactionInput, Timestamp},
         RpcApi,
+        json,
     },
     ciborium::Value,
     clap::Parser,
@@ -1114,7 +1115,6 @@ impl Inscriber {
             .reveal_tx
             .input
             .iter()
-            .take(self.inscriptions_to_burn.len())
             .map(|input| {
                 let prevout = input.previous_output;
                 let utxo = ctx.utxos.get(&prevout).expect("utxo not found").clone();
@@ -1132,7 +1132,7 @@ impl Inscriber {
             .sign_raw_transaction_with_wallet(
                 &ctx.reveal_tx,
                 Some(&inscription_destroy_prevouts),
-                None,
+                Some(json::SigHashType::from(bitcoin::sighash::EcdsaSighashType::All)),
             )?
             .hex;
 
