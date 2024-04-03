@@ -166,13 +166,12 @@ impl Wallet {
         &self,
         inscription_id: InscriptionId,
     ) -> Result<Operation> {
-        let inscription_json = self.get_inscription(inscription_id)?;
-        let tx = self.get_raw_transaction(&inscription_json.inscription_id.txid)?;
+        let tx = self.get_raw_transaction(&inscription_id.txid)?;
         let inscriptions = ParsedEnvelope::from_transaction(&tx);
         
         let envelope = inscriptions
             .into_iter()
-            .find(|env| env.input == inscription_id.index)
+            .nth(inscription_id.index as usize)
             .ok_or_else(|| anyhow!("Inscription not found in the transaction"))?;
         
         Operation::from_inscription(envelope.payload)

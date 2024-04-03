@@ -1201,10 +1201,8 @@ impl Inscriber {
 
         let total_fees = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) + Self::calculate_fee(&ctx.reveal_tx, &ctx.utxos);
 
-        let commit_input_start_index = ctx.commit_input_start_index.unwrap();
         let reveal_input_count = ctx.reveal_scripts_to_sign.len();
-
-        let inscriptions: Vec<_> = (commit_input_start_index..commit_input_start_index + reveal_input_count)
+        let inscriptions: Vec<_> = (0..reveal_input_count)
             .map(|index| InscriptionId {
                 txid: reveal_txid,
                 index: index as u32,
