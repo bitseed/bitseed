@@ -169,15 +169,12 @@ impl Wallet {
         let inscription_json = self.get_inscription(inscription_id)?;
         let tx = self.get_raw_transaction(&inscription_json.inscription_id.txid)?;
         let inscriptions = ParsedEnvelope::from_transaction(&tx);
-        //TODO do we support batch inscriptions?
-        ensure!(
-            inscriptions.len() == 1,
-            "bitseed transaction must have exactly one inscription"
-        );
+        
         let envelope = inscriptions
             .into_iter()
-            .next()
-            .expect("inscriptions length checked");
+            .find(|env| env.input == inscription_id.index)
+            .ok_or_else(|| anyhow!("Inscription not found in the transaction"))?;
+        
         Operation::from_inscription(envelope.payload)
     }
 }

@@ -7,6 +7,10 @@ use ciborium::Value;
 use ord::Inscription;
 use serde::{Deserialize, Serialize};
 
+pub trait Mergeable {
+    fn sft(&self) -> SFT;
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeployRecord {
     pub tick: String,
@@ -40,14 +44,32 @@ pub struct MintRecord {
     pub sft: SFT,
 }
 
+impl Mergeable for MintRecord {
+    fn sft(&self) -> SFT {
+        self.sft.clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SplitRecord {
     pub sft: SFT,
 }
 
+impl Mergeable for SplitRecord {
+    fn sft(&self) -> SFT {
+        self.sft.clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MergeRecord {
     pub sft: SFT,
+}
+
+impl Mergeable for MergeRecord {
+    fn sft(&self) -> SFT {
+        self.sft.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -184,10 +206,24 @@ impl Operation {
                 Ok(Operation::Mint(MintRecord { sft }))
             }
             "split" => {
-                todo!()
+                let attributes = bitseed_inscription.attributes();
+                let sft = SFT {
+                    tick,
+                    amount,
+                    attributes,
+                    content,
+                };
+                Ok(Operation::Split(SplitRecord { sft }))
             }
             "merge" => {
-                todo!()
+                let attributes = bitseed_inscription.attributes();
+                let sft = SFT {
+                    tick,
+                    amount,
+                    attributes,
+                    content,
+                };
+                Ok(Operation::Merge(MergeRecord { sft }))
             }
             _ => {
                 bail!("unknown op: {}", op)

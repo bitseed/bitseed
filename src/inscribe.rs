@@ -1,7 +1,7 @@
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
-        operation::{DeployRecord, MintRecord, SplitRecord, Operation},
+        operation::{DeployRecord, MintRecord, SplitRecord, MergeRecord, Mergeable, Operation},
         sft::{Content, SFT},
         wallet::Wallet,
         GENERATOR_TICK,
@@ -279,6 +279,48 @@ impl Inscriber {
         let split_record_b = SplitRecord { sft: sft_b };
         let result = result.with_operation(Operation::Split(split_record_b));
 
+        Ok(result)
+    }
+
+    pub fn with_merge(self, sft_inscription_ids: Vec<InscriptionId>) -> Result<Self> {
+        ensure!(sft_inscription_ids.len() > 1, "At least two SFTs are required for merging");
+    
+        let mut sft_to_merge = Vec::new();
+        let mut result = self;
+    
+        for inscription_id in sft_inscription_ids {
+            let operation = result.wallet.get_operation_by_inscription_id(inscription_id)?;
+            let sft = match operation {
+                Operation::Mint(mint_record) => mint_record.sft(),
+                Operation::Split(split_record) => split_record.sft(),
+                Operation::Merge(merge_record) => merge_record.sft(),
+                _ => bail!("Inscription {} is not a minted SFT", inscription_id),
+            };
+    
+            sft_to_merge.push(sft);
+            result = result.with_burn(inscription_id, "merge_SFT".to_string());
+        }
+    
+        let mut merged_sft = sft_to_merge[0].clone();
+        for sft in sft_to_merge.iter().skip(1) {
+            ensure!(
+                merged_sft.tick == sft.tick,
+                "All SFTs must have the same tick to be merged"
+            );
+            ensure!(
+                merged_sft.attributes == sft.attributes,
+                "All SFTs must have the same attributes to be merged"
+            );
+            ensure!(
+                merged_sft.content == sft.content,
+                "All SFTs must have the same content to be merged"
+            );
+            merged_sft.amount += sft.amount;
+        }
+    
+        let merge_record = MergeRecord { sft: merged_sft };
+        result = result.with_operation(Operation::Merge(merge_record));
+    
         Ok(result)
     }
 

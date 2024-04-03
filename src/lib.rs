@@ -53,6 +53,7 @@ enum Commands {
     Deploy(commands::deploy::DeployCommand),
     Mint(commands::mint::MintCommand),
     Split(commands::split::SplitCommand),
+    Merge(commands::merge::MergeCommand),
 }
 
 pub fn run(cli: BitseedCli) -> SubcommandResult {
@@ -62,6 +63,7 @@ pub fn run(cli: BitseedCli) -> SubcommandResult {
         Commands::Deploy(deploy) => deploy.run(wallet),
         Commands::Mint(mint) => mint.run(wallet),
         Commands::Split(split) => split.run(wallet),
+        Commands::Merge(merge) => merge.run(wallet),
     }?;
     
     Ok(output)
