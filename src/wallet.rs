@@ -200,4 +200,34 @@ impl Wallet {
         
         Operation::from_inscription(envelope.payload)
     }
+
+    pub fn send_raw_transaction_v2<R: bitcoincore_rpc::RawTx>(
+        &self,
+        tx: R,
+        maxfeerate: Option<f64>,
+        maxburnamount: Option<f64>
+    ) -> Result<bitcoin::Txid> {
+        let bitcoin_client = self.bitcoin_client()?;
+
+        // Prepare the parameters for the RPC call
+        let mut params = vec![tx.raw_hex().into()];
+
+        // Add maxfeerate and maxburnamount to the params if they are Some
+        if let Some(feerate) = maxfeerate {
+            params.push(serde_json::to_value(feerate).unwrap());
+        } else {
+            params.push(serde_json::to_value(0.10).unwrap());
+        }
+
+        if let Some(burnamount) = maxburnamount {
+            params.push(serde_json::to_value(burnamount).unwrap());
+        } else {
+            params.push(serde_json::to_value(0.0).unwrap());
+        }
+
+        // Make the RPC call
+        let tx_id: bitcoin::Txid = bitcoin_client.call("sendrawtransaction", &params)?;
+
+        Ok(tx_id)
+    }
 }

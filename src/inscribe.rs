@@ -105,6 +105,8 @@ pub struct InscribeContext {
     pub reveal_scripts_to_sign: Vec<ScriptBuf>,
     pub control_blocks_to_sign: Vec<ControlBlock>,
     pub commit_input_start_index: Option<usize>,
+
+    pub total_burn_postage: Option<f64>
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -877,6 +879,7 @@ impl Inscriber {
             reveal_scripts_to_sign: Vec::new(),
             control_blocks_to_sign: Vec::new(),
             commit_input_start_index: None,
+            total_burn_postage: None,
         })
     }
 
@@ -919,6 +922,8 @@ impl Inscriber {
 
     fn build_revert(&self, ctx: &mut InscribeContext) -> Result<()> {
         // Process the logic of inscription destruction
+        let mut total_burn_postage = 0;
+
         for inscription_to_burn in &self.inscriptions_to_burn {
             let inscription_id = inscription_to_burn.inscription_id;
             let satpoint = self.wallet.get_inscription_satpoint_v2(inscription_id)?;
@@ -929,15 +934,22 @@ impl Inscriber {
                 witness: Witness::new(),
             };
             ctx.reveal_tx.input.push(input);
+
+            let inscription_output = ctx.utxos.get(&satpoint.outpoint).expect("inscription utxo not found");
+            total_burn_postage += inscription_output.value;
+        }
+
+        if self.inscriptions_to_burn.len() > 0 {
+            let msg = b"bitseed".to_vec();
+            let msg_push_bytes = script::PushBytesBuf::try_from(msg.clone()).expect("burn message should fit");
     
-            let message_bytes = inscription_to_burn.message.clone().into_bytes();
-            let msg_push_bytes = script::PushBytesBuf::try_from(message_bytes).expect("burn message should fit");
             let script = ScriptBuf::new_op_return(&msg_push_bytes);
             let output = TxOut {
                 script_pubkey: script,
-                value: 0,
+                value: total_burn_postage,
             };
             ctx.reveal_tx.output.push(output);
+            ctx.total_burn_postage = Some(total_burn_postage as f64);
         }
 
         // Process the logic of inscription revelation
@@ -987,49 +999,7 @@ impl Inscriber {
         let actual_reveal_fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
         let total_new_postage = self.option.postage().to_sat() * self.inscriptions.len() as u64;
     
-        let mut total_burn_postage = 0;
-        for inscription_to_burn in &self.inscriptions_to_burn {
-            let inscription_id = inscription_to_burn.inscription_id;
-            let inscription_satpoint = self.wallet.get_inscription_satpoint_v2(inscription_id)?;
-            let inscription_output = ctx.utxos.get(&inscription_satpoint.outpoint).expect("inscription utxo not found");
-            total_burn_postage += inscription_output.value;
-        }
-    
-        let mut reveal_additional_fee = 0;
-        let mut reveal_change_value = 0;
-
-        if total_burn_postage < actual_reveal_fee + total_new_postage {
-            reveal_additional_fee = actual_reveal_fee + total_new_postage - total_burn_postage;
-        } else {
-            reveal_change_value = total_burn_postage - actual_reveal_fee - total_new_postage;
-
-            for output in ctx.commit_tx.output.iter_mut() {
-                reveal_change_value += output.value
-            }
-        }
-    
-        if reveal_change_value > dust_threshold {
-            let change_output = TxOut {
-                script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
-                value: reveal_change_value,
-            };
-            ctx.reveal_tx.output.push(change_output);
-    
-            // Recalculate the actual reveal fee, considering the impact of the change output
-            let new_reveal_fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
-    
-            // Adjust the change amount to compensate for the fee change
-            let fee_difference = new_reveal_fee - actual_reveal_fee;
-            reveal_change_value -= fee_difference;
-    
-            if reveal_change_value <= dust_threshold {
-                // If the adjusted change amount is less than or equal to the dust threshold, remove the change output
-                ctx.reveal_tx.output.pop();
-            } else {
-                // Update the amount of the change output
-                ctx.reveal_tx.output.last_mut().unwrap().value = reveal_change_value;
-            }
-        }
+        let reveal_additional_fee = actual_reveal_fee + total_new_postage;
 
         if reveal_additional_fee > 0 {
             let mut remaining_fee = reveal_additional_fee;
@@ -1192,7 +1162,7 @@ impl Inscriber {
             }
         };
 
-        let reveal_txid = match bitcoin_client.send_raw_transaction(&ctx.signed_reveal_tx_hex) {
+        let reveal_txid = match self.wallet.send_raw_transaction_v2(&ctx.signed_reveal_tx_hex, None, ctx.total_burn_postage) {
             Ok(txid) => txid,
             Err(err) => {
                 return Err(anyhow!(
