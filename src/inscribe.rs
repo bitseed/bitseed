@@ -891,6 +891,8 @@ impl Inscriber {
             witness: Witness::new(),
         });
 
+        let dust_threshold = self.destination.script_pubkey().dust_value().to_sat();
+
         for inscription in &self.inscriptions {
             let (key_pair, reveal_script, control_block, taproot_spend_info) =
                 Self::create_reveal_script_and_control_block(inscription, &secp256k1)?;
@@ -900,7 +902,7 @@ impl Inscriber {
     
             let commit_tx_output = TxOut {
                 script_pubkey: commit_tx_address.script_pubkey(),
-                value: 0,
+                value: dust_threshold,
             };
     
             ctx.commit_tx.output.push(commit_tx_output);
@@ -980,6 +982,8 @@ impl Inscriber {
     }
 
     fn update_fees(&self, ctx: &mut InscribeContext) -> Result<()> {
+        let dust_threshold = self.destination.script_pubkey().dust_value().to_sat();
+
         let actual_reveal_fee = self.estimate_reveal_tx_fee(ctx, &ctx.reveal_scripts, &ctx.control_blocks);
         let total_new_postage = self.option.postage().to_sat() * self.inscriptions.len() as u64;
     
@@ -998,10 +1002,12 @@ impl Inscriber {
             reveal_additional_fee = actual_reveal_fee + total_new_postage - total_burn_postage;
         } else {
             reveal_change_value = total_burn_postage - actual_reveal_fee - total_new_postage;
+
+            for output in ctx.commit_tx.output.iter_mut() {
+                reveal_change_value += output.value
+            }
         }
     
-        let dust_threshold = self.destination.script_pubkey().dust_value().to_sat();
-
         if reveal_change_value > dust_threshold {
             let change_output = TxOut {
                 script_pubkey: self.wallet.get_change_address()?.script_pubkey(),
@@ -1029,11 +1035,7 @@ impl Inscriber {
             let mut remaining_fee = reveal_additional_fee;
 
             for output in ctx.commit_tx.output.iter_mut() {
-                if output.value < dust_threshold {
-                    let additional_value = dust_threshold - output.value;
-                    output.value += additional_value;
-                    remaining_fee -= additional_value;
-                }
+                remaining_fee -= output.value;
             }
 
             // If there's still remaining fee, add it to the last output
