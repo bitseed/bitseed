@@ -99,6 +99,30 @@ impl Wallet {
         Ok(serde_json::from_str(&response.text()?)?)
     }
 
+    pub fn get_inscription_envelope(
+        &self,
+        inscription_id: InscriptionId,
+    ) -> Result<ord::Envelope<ord::Inscription>> {
+        let tx = self.get_raw_transaction(&inscription_id.txid)?;
+        let inscriptions = ParsedEnvelope::from_transaction(&tx);
+        
+        let envelope = inscriptions
+            .into_iter()
+            .nth(inscription_id.index as usize)
+            .ok_or_else(|| anyhow!("Inscription not found in the transaction"))?;
+        
+        Ok(envelope)
+    }
+
+    pub fn get_inscription_satpoint_v2(&self, inscription_id: InscriptionId) -> Result<SatPoint> {
+        let envelope = self.get_inscription_envelope(inscription_id)?;
+
+        Ok(SatPoint{
+            outpoint: OutPoint { txid: inscription_id.txid, vout: envelope.input },
+            offset: envelope.offset as u64
+        })
+    }
+
     pub fn get_runic_outputs(&self) -> Result<BTreeSet<OutPoint>> {
         self.ord_wallet.get_runic_outputs()
     }

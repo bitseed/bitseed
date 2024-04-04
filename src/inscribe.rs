@@ -921,7 +921,7 @@ impl Inscriber {
         // Process the logic of inscription destruction
         for inscription_to_burn in &self.inscriptions_to_burn {
             let inscription_id = inscription_to_burn.inscription_id;
-            let satpoint = self.wallet.get_inscription_satpoint(inscription_id)?;
+            let satpoint = self.wallet.get_inscription_satpoint_v2(inscription_id)?;
             let input = TxIn {
                 previous_output: satpoint.outpoint,
                 script_sig: ScriptBuf::new(),
@@ -990,7 +990,7 @@ impl Inscriber {
         let mut total_burn_postage = 0;
         for inscription_to_burn in &self.inscriptions_to_burn {
             let inscription_id = inscription_to_burn.inscription_id;
-            let inscription_satpoint = self.wallet.get_inscription_satpoint(inscription_id)?;
+            let inscription_satpoint = self.wallet.get_inscription_satpoint_v2(inscription_id)?;
             let inscription_output = ctx.utxos.get(&inscription_satpoint.outpoint).expect("inscription utxo not found");
             total_burn_postage += inscription_output.value;
         }
