@@ -7,12 +7,12 @@ use ord::InscriptionId;
 
 #[derive(Debug, Parser)]
 pub struct SplitCommand {
-    #[arg(long, help = "The split asset inscription ID.")]
-    asset_inscription_id: InscriptionId,
-
-    #[arg(long, help = "The split amount.")]
-    amount: u64,
-
+    #[arg(long, help = "The split sft inscription ID.")]
+    sft_inscription_id: InscriptionId,
+    
+    #[arg(long, help = "The split amounts.", num_args = 1..)]
+    amounts: Vec<u64>,
+    
     #[clap(flatten)]
     inscribe_options: InscribeOptions,
 }
@@ -20,7 +20,7 @@ pub struct SplitCommand {
 impl SplitCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
         let output = Inscriber::new(wallet, self.inscribe_options)?
-            .with_split(self.asset_inscription_id, self.amount)?
+            .with_split(self.sft_inscription_id, self.amounts)?
             .inscribe_v2()?;
         Ok(Box::new(output))
     }

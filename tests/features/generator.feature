@@ -40,7 +40,7 @@ Feature: Bitseed CLI integration tests
     Then sleep: "5"
 
     # split 
-    Then cmd bitseed: "split --fee-rate 1 --asset-inscription-id {{$.mint[-1].inscriptions[0].Id}} --amount 100" 
+    Then cmd bitseed: "split --fee-rate 1 --sft-inscription-id {{$.mint[-1].inscriptions[0].Id}} --amounts 500 --amounts 300" 
     Then assert: "'{{$.split[-1]}}' not_contains error"
 
     # mine a block
@@ -49,7 +49,7 @@ Feature: Bitseed CLI integration tests
     Then sleep: "5"
 
     # merge 
-    Then cmd bitseed: "merge --fee-rate 1 --sft-inscription-ids {{$.split[-1].inscriptions[0].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[1].Id}}"
+    Then cmd bitseed: "merge --fee-rate 1 --sft-inscription-ids {{$.split[-1].inscriptions[0].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[1].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[2].Id}}"
     Then assert: "'{{$.merge[-1]}}' not_contains error"
 
     # end

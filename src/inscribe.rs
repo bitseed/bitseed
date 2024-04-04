@@ -242,48 +242,51 @@ impl Inscriber {
         Ok(self.with_operation(Operation::Mint(mint_record)))
     }
 
-    pub fn with_split(self, asset_inscription_id: InscriptionId, amount: u64) -> Result<Self> {
-        let operation = self
-            .wallet
-            .get_operation_by_inscription_id(asset_inscription_id)?;
-
-        let mint_record = match operation {
-            Operation::Mint(mint_record) => mint_record,
-            _ => bail!("mint transaction must have a mint operation"),
+    pub fn with_split(self, asset_inscription_id: InscriptionId, amounts: Vec<u64>) -> Result<Self> {
+        let operation = self.wallet.get_operation_by_inscription_id(asset_inscription_id)?;
+        let sft = match operation {
+            Operation::Mint(mint_record) => mint_record.sft(),
+            Operation::Split(split_record) => split_record.sft(),
+            Operation::Merge(merge_record) => merge_record.sft(),
+            _ => bail!("Inscription {} is not a valid SFT record", asset_inscription_id),
         };
-
-        let sft_c = mint_record.sft;
-
+    
         ensure!(
-            sft_c.amount > 1,
-            "The amount of SFT to be split requires approximately 1"
+            sft.amount >= amounts.iter().sum::<u64>(),
+            "The total split amount exceeds the available SFT amount"
         );
-
-        let sft_a = SFT {
-            tick: sft_c.tick.clone(),
-            amount: amount,
-            attributes: sft_c.attributes.clone(),
-            content: sft_c.content.clone(),
-        };
-
-        let sft_b = SFT {
-            tick: sft_c.tick,
-            amount: sft_c.amount - amount,
-            attributes: sft_c.attributes,
-            content: sft_c.content,
-        };
-
-        let result = self.with_burn(asset_inscription_id, "split_SFT".to_string());
-
-        let split_record_a = SplitRecord { sft: sft_a };
-        let result = result.with_operation(Operation::Split(split_record_a));
-
-        let split_record_b = SplitRecord { sft: sft_b };
-        let result = result.with_operation(Operation::Split(split_record_b));
-
+    
+        let mut remaining_amount = sft.amount;
+        let mut result = self.with_burn(asset_inscription_id, "split_SFT".to_string());
+    
+        let amounts_len = amounts.len();
+    
+        for (index, amount) in amounts.into_iter().enumerate() {
+            let split_sft = SFT {
+                tick: sft.tick.clone(),
+                amount,
+                attributes: sft.attributes.clone(),
+                content: sft.content.clone(),
+            };
+            let split_record = SplitRecord { sft: split_sft };
+            result = result.with_operation(Operation::Split(split_record));
+            remaining_amount -= amount;
+    
+            if index == amounts_len - 1 {
+                let remaining_sft = SFT {
+                    tick: sft.tick.clone(),
+                    amount: remaining_amount,
+                    attributes: sft.attributes.clone(),
+                    content: sft.content.clone(),
+                };
+                let split_record = SplitRecord { sft: remaining_sft };
+                result = result.with_operation(Operation::Split(split_record));
+            }
+        }
+    
         Ok(result)
     }
-
+    
     pub fn with_merge(self, sft_inscription_ids: Vec<InscriptionId>) -> Result<Self> {
         ensure!(sft_inscription_ids.len() > 1, "At least two SFTs are required for merging");
     
