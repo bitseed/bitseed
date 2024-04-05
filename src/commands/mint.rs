@@ -21,7 +21,7 @@ impl MintCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
         let output = Inscriber::new(wallet, self.inscribe_options)?
             .with_mint(self.deploy_inscription_id, self.user_input)?
-            .inscribe_v2()?;
+            .inscribe()?;
         Ok(Box::new(output))
     }
 }

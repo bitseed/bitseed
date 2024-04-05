@@ -18,7 +18,7 @@ impl MergeCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
         let output = Inscriber::new(wallet, self.inscribe_options)?
             .with_merge(self.sft_inscription_ids)?
-            .inscribe_v2()?;
+            .inscribe()?;
         Ok(Box::new(output))
     }
 }

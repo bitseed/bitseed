@@ -13,11 +13,10 @@ use {
         address::NetworkUnchecked,
         blockdata::{opcodes, script},
         key::{TapTweak, TweakedKeyPair, TweakedPublicKey, UntweakedKeyPair},
-        policy::MAX_STANDARD_TX_WEIGHT,
         secp256k1::{self, constants::SCHNORR_SIGNATURE_SIZE, rand, Secp256k1, XOnlyPublicKey, KeyPair, All},
         sighash::{Prevouts, SighashCache, TapSighashType},
         taproot::{ControlBlock, LeafVersion, Signature, TapLeafHash, TaprootBuilder, TaprootSpendInfo},
-        Address, Amount, OutPoint, PrivateKey, Script, ScriptBuf, Sequence, Transaction, TxIn,
+        Address, Amount, OutPoint, PrivateKey, ScriptBuf, Sequence, Transaction, TxIn,
         TxOut, Txid, Witness, 
     },
     bitcoincore_rpc::{
@@ -27,7 +26,7 @@ use {
     },
     ciborium::Value,
     clap::Parser,
-    ord::{FeeRate, Inscription, InscriptionId, Target, TransactionBuilder},
+    ord::{FeeRate, Inscription, InscriptionId},
     ordinals::SatPoint,
     serde::{Deserialize, Serialize},
     std::{collections::BTreeMap, path::Path},
@@ -286,7 +285,7 @@ impl Inscriber {
     
         Ok(result)
     }
-    
+
     pub fn with_merge(self, sft_inscription_ids: Vec<InscriptionId>) -> Result<Self> {
         ensure!(sft_inscription_ids.len() > 1, "At least two SFTs are required for merging");
     
@@ -340,269 +339,6 @@ impl Inscriber {
         self
     }
 
-    pub fn inscribes(&self) -> Result<Vec<InscribeOutput>> {
-        let outputs: Result<Vec<InscribeOutput>, _> = self
-            .inscriptions
-            .iter()
-            .map(|inscription| self.inscribe_inner(inscription))
-            .collect();
-
-        outputs
-    }
-
-    pub fn inscribe(&self) -> Result<InscribeOutput> {
-        let outputs = self.inscribes();
-
-        match outputs {
-            Ok(inscribe_outputs) => {
-                if let Some(first_output) = inscribe_outputs.into_iter().next() {
-                    Ok(first_output)
-                } else {
-                    Err(anyhow::anyhow!("No inscriptions found"))
-                }
-            },
-            Err(e) => Err(e),
-        }
-    }
-
-    fn inscribe_inner(&self, inscription: &Inscription) -> Result<InscribeOutput> {
-        let mut utxos = self.wallet.get_unspent_outputs()?;
-        let locked_utxos = self.wallet.get_locked_outputs()?;
-        let runic_utxos = self.wallet.get_runic_outputs()?;
-        let chain = self.wallet.chain();
-        let commit_tx_change = [
-            self.wallet.get_change_address()?,
-            self.wallet.get_change_address()?,
-        ];
-
-        let wallet_inscriptions = self.wallet.get_inscriptions()?;
-
-        let destination = self.destination.clone();
-        let satpoint = self.satpoint;
-
-        let secp256k1 = Secp256k1::new();
-        let key_pair = UntweakedKeyPair::new(&secp256k1, &mut rand::thread_rng());
-        let (public_key, _parity) = XOnlyPublicKey::from_keypair(&key_pair);
-
-        let reveal_script = inscription
-            .append_reveal_script_to_builder(
-                ScriptBuf::builder()
-                    .push_slice(public_key.serialize())
-                    .push_opcode(opcodes::all::OP_CHECKSIG),
-            )
-            .into_script();
-
-        let taproot_spend_info = TaprootBuilder::new()
-            .add_leaf(0, reveal_script.clone())
-            .expect("adding leaf should work")
-            .finalize(&secp256k1, public_key)
-            .expect("finalizing taproot builder should work");
-
-        let control_block = taproot_spend_info
-            .control_block(&(reveal_script.clone(), LeafVersion::TapScript))
-            .expect("should compute control block");
-
-        let commit_tx_address =
-            Address::p2tr_tweaked(taproot_spend_info.output_key(), chain.network());
-
-        let total_postage = self.option.postage().to_sat();
-
-        let mut reveal_inputs = Vec::new();
-        let mut reveal_outputs = Vec::new();
-
-        reveal_inputs.push(OutPoint::null());
-
-        reveal_outputs.push(TxOut {
-            script_pubkey: destination.script_pubkey(),
-            value: self.option.postage().to_sat(),
-        });
-
-        let commit_input = 0;
-
-        let (_, reveal_fee) = Self::build_reveal_transaction(
-            &control_block,
-            self.option.reveal_fee_rate(),
-            reveal_inputs.clone(),
-            commit_input,
-            reveal_outputs.clone(),
-            &reveal_script,
-        );
-
-        let target = Target::Value(reveal_fee + Amount::from_sat(total_postage));
-
-        let commit_tx = TransactionBuilder::new(
-            satpoint,
-            wallet_inscriptions,
-            utxos.clone(),
-            locked_utxos.clone(),
-            runic_utxos.clone(),
-            commit_tx_address.clone(),
-            commit_tx_change,
-            self.option.commit_fee_rate(),
-            target,
-        )
-        .build_transaction()?;
-
-        let (vout, _commit_output) = commit_tx
-            .output
-            .iter()
-            .enumerate()
-            .find(|(_vout, output)| output.script_pubkey == commit_tx_address.script_pubkey())
-            .expect("should find sat commit/inscription output");
-
-        reveal_inputs[commit_input] = OutPoint {
-            txid: commit_tx.txid(),
-            vout: vout.try_into().unwrap(),
-        };
-
-        let (mut reveal_tx, _fee) = Self::build_reveal_transaction(
-            &control_block,
-            self.option.reveal_fee_rate(),
-            reveal_inputs,
-            commit_input,
-            reveal_outputs.clone(),
-            &reveal_script,
-        );
-
-        for output in reveal_tx.output.iter() {
-            ensure!(
-                output.value >= output.script_pubkey.dust_value().to_sat(),
-                "commit transaction output would be dust"
-            )
-        }
-
-        let mut prevouts = Vec::new();
-
-        prevouts.push(commit_tx.output[vout].clone());
-
-        let mut sighash_cache = SighashCache::new(&mut reveal_tx);
-
-        let sighash = sighash_cache
-            .taproot_script_spend_signature_hash(
-                commit_input,
-                &Prevouts::All(&prevouts),
-                TapLeafHash::from_script(&reveal_script, LeafVersion::TapScript),
-                TapSighashType::Default,
-            )
-            .expect("signature hash should compute");
-
-        let sig = secp256k1.sign_schnorr(
-            &secp256k1::Message::from_slice(sighash.as_ref())
-                .expect("should be cryptographically secure hash"),
-            &key_pair,
-        );
-
-        let witness = sighash_cache
-            .witness_mut(commit_input)
-            .expect("getting mutable witness reference should work");
-
-        witness.push(
-            Signature {
-                sig,
-                hash_ty: TapSighashType::Default,
-            }
-            .to_vec(),
-        );
-
-        witness.push(reveal_script);
-        witness.push(&control_block.serialize());
-
-        let recovery_key_pair = key_pair.tap_tweak(&secp256k1, taproot_spend_info.merkle_root());
-
-        let (x_only_pub_key, _parity) = recovery_key_pair.to_inner().x_only_public_key();
-        assert_eq!(
-            Address::p2tr_tweaked(
-                TweakedPublicKey::dangerous_assume_tweaked(x_only_pub_key),
-                chain.network(),
-            ),
-            commit_tx_address
-        );
-
-        let reveal_weight = reveal_tx.weight();
-
-        if !self.option.no_limit
-            && reveal_weight > bitcoin::Weight::from_wu(MAX_STANDARD_TX_WEIGHT.into())
-        {
-            bail!(
-            "reveal transaction weight greater than {MAX_STANDARD_TX_WEIGHT} (MAX_STANDARD_TX_WEIGHT): {reveal_weight}"
-          );
-        }
-
-        utxos.insert(
-            reveal_tx.input[commit_input].previous_output,
-            commit_tx.output[reveal_tx.input[commit_input].previous_output.vout as usize].clone(),
-        );
-
-        let total_fees =
-            Self::calculate_fee(&commit_tx, &utxos) + Self::calculate_fee(&reveal_tx, &utxos);
-
-        if self.option.dry_run {
-            return Ok(InscribeOutput {
-                commit_tx: commit_tx.txid(),
-                reveal_tx: reveal_tx.txid(),
-                total_fees: total_fees,
-                inscriptions: vec!(InscriptionOrId::Inscription(inscription.clone())),
-            });
-        }
-
-        let bitcoin_client = self.wallet.bitcoin_client()?;
-
-        let signed_commit_tx = bitcoin_client
-            .sign_raw_transaction_with_wallet(&commit_tx, None, None)?
-            .hex;
-
-        let result = bitcoin_client.sign_raw_transaction_with_wallet(
-            &reveal_tx,
-            Some(
-                &commit_tx
-                    .output
-                    .iter()
-                    .enumerate()
-                    .map(|(vout, output)| SignRawTransactionInput {
-                        txid: commit_tx.txid(),
-                        vout: vout.try_into().unwrap(),
-                        script_pub_key: output.script_pubkey.clone(),
-                        redeem_script: None,
-                        amount: Some(Amount::from_sat(output.value)),
-                    })
-                    .collect::<Vec<SignRawTransactionInput>>(),
-            ),
-            None,
-        )?;
-
-        ensure!(
-            result.complete,
-            format!("Failed to sign reveal transaction: {:?}", result.errors)
-        );
-
-        let signed_reveal_tx = result.hex;
-
-        if !self.option.no_backup {
-            Self::backup_recovery_key(&self.wallet, recovery_key_pair)?;
-        }
-
-        let commit = bitcoin_client.send_raw_transaction(&signed_commit_tx)?;
-
-        let reveal = match bitcoin_client.send_raw_transaction(&signed_reveal_tx) {
-            Ok(txid) => txid,
-            Err(err) => {
-              return Err(anyhow!(
-              "Failed to send reveal transaction: {err}\nCommit tx {commit} will be recovered once mined"
-            ))
-            }
-          };
-        let inscription_id = InscriptionId {
-            txid: reveal,
-            index: 0,
-        };
-        Ok(InscribeOutput {
-            commit_tx: commit,
-            reveal_tx: reveal,
-            total_fees: total_fees,
-            inscriptions: vec!(InscriptionOrId::Id(inscription_id)),
-        })
-    }
-
     fn backup_recovery_key(wallet: &Wallet, recovery_key_pair: TweakedKeyPair) -> Result<()> {
         let recovery_private_key = PrivateKey::new(
             recovery_key_pair.to_inner().secret_key(),
@@ -631,53 +367,6 @@ impl Inscriber {
         }
 
         Ok(())
-    }
-
-    fn build_reveal_transaction(
-        control_block: &ControlBlock,
-        fee_rate: FeeRate,
-        reveal_inputs: Vec<OutPoint>,
-        commit_input_index: usize,
-        outputs: Vec<TxOut>,
-        script: &Script,
-    ) -> (Transaction, Amount) {
-        let reveal_tx = Transaction {
-            input: reveal_inputs
-                .iter()
-                .map(|outpoint| TxIn {
-                    previous_output: *outpoint,
-                    script_sig: script::Builder::new().into_script(),
-                    witness: Witness::new(),
-                    sequence: Sequence::ENABLE_RBF_NO_LOCKTIME,
-                })
-                .collect(),
-            output: outputs,
-            lock_time: LockTime::ZERO,
-            version: 2,
-        };
-
-        let fee = {
-            let mut reveal_tx = reveal_tx.clone();
-
-            for (current_index, txin) in reveal_tx.input.iter_mut().enumerate() {
-                // add dummy inscription witness for reveal input/commit output
-                if current_index == commit_input_index {
-                    txin.witness.push(
-                        Signature::from_slice(&[0; SCHNORR_SIGNATURE_SIZE])
-                            .unwrap()
-                            .to_vec(),
-                    );
-                    txin.witness.push(script);
-                    txin.witness.push(&control_block.serialize());
-                } else {
-                    txin.witness = Witness::from_slice(&[&[0; SCHNORR_SIGNATURE_SIZE]]);
-                }
-            }
-
-            fee_rate.fee(reveal_tx.vsize())
-        };
-
-        (reveal_tx, fee)
     }
 
     fn calculate_fee(tx: &Transaction, utxos: &BTreeMap<OutPoint, TxOut>) -> u64 {
@@ -910,7 +599,7 @@ impl Inscriber {
                 script_pubkey: commit_tx_address.script_pubkey(),
                 value: dust_threshold,
             };
-    
+
             ctx.commit_tx.output.push(commit_tx_output);
     
             ctx.key_pairs.push(key_pair);
@@ -1156,8 +845,62 @@ impl Inscriber {
         Ok(())
     }
 
+    fn backup_keys(&self, ctx: &mut InscribeContext) -> Result<()> {
+        if self.option.no_backup {
+            return Ok(())
+        }
+
+        let secp256k1 = Secp256k1::new();
+
+        for ((key_pair, commit_tx_address), taproot_spend_info) in ctx
+            .key_pairs
+            .iter()
+            .zip(ctx.commit_tx_addresses.iter())
+            .zip(ctx.taproot_spend_infos.iter())
+        {
+            let recovery_key_pair = key_pair.tap_tweak(&secp256k1, taproot_spend_info.merkle_root());
+            let (x_only_pub_key, _parity) = recovery_key_pair.to_inner().x_only_public_key();
+            assert_eq!(
+                Address::p2tr_tweaked(
+                    TweakedPublicKey::dangerous_assume_tweaked(x_only_pub_key),
+                    self.wallet.chain().network(),
+                ),
+                commit_tx_address.clone(),
+                "commit_tx_address invalid"
+            );
+
+            Self::backup_recovery_key(&self.wallet, recovery_key_pair)?;
+        }
+
+        Ok(())
+    }
+
     fn boardcaset_tx(&self, ctx: &mut InscribeContext) -> Result<InscribeOutput> {
+        let total_fees = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) + Self::calculate_fee(&ctx.reveal_tx, &ctx.utxos);
+
+        let origin_reveal_txid = ctx.reveal_tx.txid();
+        let reveal_input_count = ctx.reveal_scripts_to_sign.len();
+        let inscriptions: Vec<_> = (0..reveal_input_count)
+            .map(|index| InscriptionId {
+                txid: origin_reveal_txid.clone(),
+                index: index as u32,
+            })
+            .map(|ins_id| InscriptionOrId::Id(ins_id))
+            .collect();
+
+        if self.option.dry_run {
+            let origin_commit_txid = ctx.commit_tx.txid();
+
+            return Ok(InscribeOutput {
+                commit_tx: origin_commit_txid,
+                reveal_tx: origin_reveal_txid,
+                total_fees: total_fees,
+                inscriptions,
+            });
+        }
+
         let bitcoin_client = self.wallet.bitcoin_client()?;
+        
         let commit_txid = match bitcoin_client.send_raw_transaction(&ctx.signed_commit_tx_hex) {
             Ok(txid) => txid,
             Err(err) => {
@@ -1174,16 +917,7 @@ impl Inscriber {
             }
         };
 
-        let total_fees = Self::calculate_fee(&ctx.commit_tx, &ctx.utxos) + Self::calculate_fee(&ctx.reveal_tx, &ctx.utxos);
-
-        let reveal_input_count = ctx.reveal_scripts_to_sign.len();
-        let inscriptions: Vec<_> = (0..reveal_input_count)
-            .map(|index| InscriptionId {
-                txid: reveal_txid,
-                index: index as u32,
-            })
-            .map(|ins_id| InscriptionOrId::Id(ins_id))
-            .collect();
+        assert_eq!(origin_reveal_txid, reveal_txid, "reveal txid should be equal");
 
         Ok(InscribeOutput {
             commit_tx: commit_txid,
@@ -1193,13 +927,14 @@ impl Inscriber {
         })
     }
 
-    pub fn inscribe_v2(&self) -> Result<InscribeOutput> {
+    pub fn inscribe(&self) -> Result<InscribeOutput> {
         let mut ctx = self.prepare_context()?;
 
         self.build_commit(&mut ctx)?;
         self.build_revert(&mut ctx)?;
         self.update_fees(&mut ctx)?;
         self.sign(&mut ctx)?;
+        self.backup_keys(&mut ctx)?;
         self.boardcaset_tx(&mut ctx)
     }
 }

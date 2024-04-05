@@ -42,7 +42,7 @@ impl DeployCommand {
                 self.repeat,
                 self.deploy_args,
             )?
-            .inscribe_v2()?;
+            .inscribe()?;
         Ok(Box::new(output))
     }
 }

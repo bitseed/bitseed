@@ -28,7 +28,7 @@ Feature: Bitseed CLI integration tests
     # mine a block
     Then cmd ord: "wallet receive"
     Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
-    Then sleep: "5"
+    Then sleep: "10"
 
     # mint 
     Then cmd bitseed: "mint --fee-rate 1 --deploy-inscription-id {{$.deploy[-1].inscriptions[0].Id}} --user-input hello_bitseed" 
@@ -37,7 +37,7 @@ Feature: Bitseed CLI integration tests
     # mine a block
     Then cmd ord: "wallet receive"
     Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
-    Then sleep: "5"
+    Then sleep: "10"
 
     # split 
     Then cmd bitseed: "split --fee-rate 1 --sft-inscription-id {{$.mint[-1].inscriptions[0].Id}} --amounts 500 --amounts 300" 
@@ -46,7 +46,7 @@ Feature: Bitseed CLI integration tests
     # mine a block
     Then cmd ord: "wallet receive"
     Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
-    Then sleep: "5"
+    Then sleep: "10"
 
     # merge 
     Then cmd bitseed: "merge --fee-rate 1 --sft-inscription-ids {{$.split[-1].inscriptions[0].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[1].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[2].Id}}"
