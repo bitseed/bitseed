@@ -52,5 +52,10 @@ Feature: Bitseed CLI integration tests
     Then cmd bitseed: "merge --fee-rate 1 --sft-inscription-ids {{$.split[-1].inscriptions[0].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[1].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[2].Id}}"
     Then assert: "'{{$.merge[-1]}}' not_contains error"
 
+    # view 
+    Then cmd bitseed: "view --sft-inscription-id {{$.merge[-1].inscriptions[0].Id}}"
+    Then assert: "'{{$.view[-1]}}' not_contains error"
+    Then assert: "{{$.view[-1].amount}} == 1000"
+
     # end
     Then release bitcoind and Ord servers
