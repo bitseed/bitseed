@@ -1,5 +1,4 @@
 use crate::operation::Operation;
-use anyhow::ensure;
 use anyhow::{anyhow, bail, Result};
 use bitcoin::Address;
 use bitcoin::OutPoint;

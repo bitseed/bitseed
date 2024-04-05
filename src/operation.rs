@@ -7,8 +7,8 @@ use ciborium::Value;
 use ord::Inscription;
 use serde::{Deserialize, Serialize};
 
-pub trait Mergeable {
-    fn sft(&self) -> SFT;
+pub trait AsSFT {
+    fn as_sft(&self) -> SFT;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,8 +44,8 @@ pub struct MintRecord {
     pub sft: SFT,
 }
 
-impl Mergeable for MintRecord {
-    fn sft(&self) -> SFT {
+impl AsSFT for MintRecord {
+    fn as_sft(&self) -> SFT {
         self.sft.clone()
     }
 }
@@ -55,8 +55,8 @@ pub struct SplitRecord {
     pub sft: SFT,
 }
 
-impl Mergeable for SplitRecord {
-    fn sft(&self) -> SFT {
+impl AsSFT for SplitRecord {
+    fn as_sft(&self) -> SFT {
         self.sft.clone()
     }
 }
@@ -66,8 +66,8 @@ pub struct MergeRecord {
     pub sft: SFT,
 }
 
-impl Mergeable for MergeRecord {
-    fn sft(&self) -> SFT {
+impl AsSFT for MergeRecord {
+    fn as_sft(&self) -> SFT {
         self.sft.clone()
     }
 }
@@ -195,7 +195,7 @@ impl Operation {
                     deploy_args,
                 )))
             }
-            "mint" => {
+            "mint" | "split" | "merge" => {
                 let attributes = bitseed_inscription.attributes();
                 let sft = SFT {
                     tick,
@@ -203,27 +203,15 @@ impl Operation {
                     attributes,
                     content,
                 };
-                Ok(Operation::Mint(MintRecord { sft }))
-            }
-            "split" => {
-                let attributes = bitseed_inscription.attributes();
-                let sft = SFT {
-                    tick,
-                    amount,
-                    attributes,
-                    content,
+                
+                let op = match op.as_ref() {
+                    "mint" => Operation::Mint(MintRecord { sft }),
+                    "split" => Operation::Split(SplitRecord { sft }),
+                    "merge" => Operation::Merge(MergeRecord { sft }),
+                    _ => unreachable!(), // We already know it's one of the three.
                 };
-                Ok(Operation::Split(SplitRecord { sft }))
-            }
-            "merge" => {
-                let attributes = bitseed_inscription.attributes();
-                let sft = SFT {
-                    tick,
-                    amount,
-                    attributes,
-                    content,
-                };
-                Ok(Operation::Merge(MergeRecord { sft }))
+        
+                Ok(op)
             }
             _ => {
                 bail!("unknown op: {}", op)

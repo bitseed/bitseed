@@ -1,7 +1,7 @@
 use {
     crate::{
         generator::{self, GeneratorLoader, InscribeSeed},
-        operation::{DeployRecord, MintRecord, SplitRecord, MergeRecord, Mergeable, Operation},
+        operation::{DeployRecord, MintRecord, SplitRecord, MergeRecord, AsSFT, Operation},
         sft::{Content, SFT},
         wallet::Wallet,
         GENERATOR_TICK,
@@ -243,9 +243,9 @@ impl Inscriber {
     pub fn with_split(self, asset_inscription_id: InscriptionId, amounts: Vec<u64>) -> Result<Self> {
         let operation = self.wallet.get_operation_by_inscription_id(asset_inscription_id)?;
         let sft = match operation {
-            Operation::Mint(mint_record) => mint_record.sft(),
-            Operation::Split(split_record) => split_record.sft(),
-            Operation::Merge(merge_record) => merge_record.sft(),
+            Operation::Mint(mint_record) => mint_record.as_sft(),
+            Operation::Split(split_record) => split_record.as_sft(),
+            Operation::Merge(merge_record) => merge_record.as_sft(),
             _ => bail!("Inscription {} is not a valid SFT record", asset_inscription_id),
         };
     
@@ -294,9 +294,9 @@ impl Inscriber {
         for inscription_id in sft_inscription_ids {
             let operation = result.wallet.get_operation_by_inscription_id(inscription_id)?;
             let sft = match operation {
-                Operation::Mint(mint_record) => mint_record.sft(),
-                Operation::Split(split_record) => split_record.sft(),
-                Operation::Merge(merge_record) => merge_record.sft(),
+                Operation::Mint(mint_record) => mint_record.as_sft(),
+                Operation::Split(split_record) => split_record.as_sft(),
+                Operation::Merge(merge_record) => merge_record.as_sft(),
                 _ => bail!("Inscription {} is not a minted SFT", inscription_id),
             };
     
@@ -405,7 +405,7 @@ impl Inscriber {
         Ok((key_pair, reveal_script, control_block, taproot_spend_info))
     }
 
-    fn select_additional_inputs(&self, ctx: &InscribeContext, additional_value: u64) -> Result<Vec<TxIn>> {
+    fn select_additional_inputs(&self, _ctx: &InscribeContext, additional_value: u64) -> Result<Vec<TxIn>> {
         let mut selected_utxos = Vec::new();
         let mut total_selected_value = 0;
     
