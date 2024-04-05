@@ -7,7 +7,7 @@ use ord::InscriptionId;
 
 #[derive(Debug, Parser)]
 pub struct SplitCommand {
-    #[arg(long, help = "The split sft inscription ID.")]
+    #[arg(long, help = "The split SFT inscription ID.")]
     sft_inscription_id: InscriptionId,
     
     #[arg(long, help = "The split amounts.", num_args = 1..)]

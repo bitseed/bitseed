@@ -7,7 +7,7 @@ use ord::InscriptionId;
 
 #[derive(Debug, Parser)]
 pub struct MergeCommand {
-    #[arg(long, help = "The merge asset inscription IDs.")]
+    #[arg(long, help = "The merge SFT inscription IDs.")]
     sft_inscription_ids: Vec<InscriptionId>,
 
     #[clap(flatten)]
