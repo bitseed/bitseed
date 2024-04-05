@@ -5,7 +5,6 @@ use {
         sft::{Content, SFT},
         wallet::Wallet,
         GENERATOR_TICK,
-        inscription::InscriptionToBurn,
     },
     anyhow::{anyhow, bail, ensure, Result},
     bitcoin::{
@@ -120,7 +119,7 @@ pub struct Inscriber {
     wallet: Wallet,
     option: InscribeOptions,
     inscriptions: Vec<Inscription>,
-    inscriptions_to_burn: Vec<InscriptionToBurn>,
+    inscriptions_to_burn: Vec<InscriptionId>,
     satpoint: SatPoint,
     destination: Address,
 }
@@ -256,7 +255,7 @@ impl Inscriber {
         );
     
         let mut remaining_amount = sft.amount;
-        let mut result = self.with_burn(asset_inscription_id, "split_SFT".to_string());
+        let mut result = self.with_burn(asset_inscription_id);
     
         let amounts_len = amounts.len();
     
@@ -302,7 +301,7 @@ impl Inscriber {
             };
     
             sft_to_merge.push(sft);
-            result = result.with_burn(inscription_id, "merge_SFT".to_string());
+            result = result.with_burn(inscription_id);
         }
     
         let mut merged_sft = sft_to_merge[0].clone();
@@ -328,8 +327,8 @@ impl Inscriber {
         Ok(result)
     }
 
-    pub fn with_burn(mut self, inscription_id: InscriptionId, message: String) -> Self {
-        self.inscriptions_to_burn.push(InscriptionToBurn::new(inscription_id, message));
+    pub fn with_burn(mut self, inscription_id: InscriptionId) -> Self {
+        self.inscriptions_to_burn.push(inscription_id);
         self
     }
 
@@ -617,7 +616,7 @@ impl Inscriber {
         let mut total_burn_postage = 0;
 
         for inscription_to_burn in &self.inscriptions_to_burn {
-            let inscription_id = inscription_to_burn.inscription_id;
+            let inscription_id = inscription_to_burn.clone();
             let satpoint = self.wallet.get_inscription_satpoint_v2(inscription_id)?;
             let input = TxIn {
                 previous_output: satpoint.outpoint,
