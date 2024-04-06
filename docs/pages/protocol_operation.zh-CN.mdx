@@ -40,24 +40,24 @@ Mint 的内容由 generator 程序生成，用户把它铭刻到铭文中。
 ## Transfer操作
 
 Transfer操作遵循Inscription协议的UTXO跟踪模型，支持将Bitseed资产从一个地址转移到另一个地址。
-   
-## Merge操作
 
-Merge操作允许两个相同类型的Bitseed资产合并为单一资产。要求合并的资产（A、B）具有相同的资产类型（tick）、以及属性（attributes）和内容（content）。新的合并资产（C）的数量（amount）是原始资产数量的总和。
-Merge操作需要将两个原始Inscription的UTXO输出到同一个Output，并再次进行铭刻。
+## 合并操作
+
+合并操作允许将两个相同类型的Bitseed资产合并为一个资产。合并资产(A, B)必须具有相同的协议标识符(p)、资产类型(tick)和属性(attributes)。新合并资产(C)的数量(amount)是原始资产数量的总和。合并操作需要将两个原始铭文的UTXO输出到同一个Output并重新铭文。
 
 ```text
-A.tick == B.tick
+A.p == B.p
+A.tick == B.tick 
 A.attributes == B.attributes
-A.content == B.content
 C.amount = A.amount + B.amount
 ```
 
-比如当前有 Bitseed SFT A 
+例如,目前有Bitseed A
+
 ```json
 SFT {
-    "tick": "bits",
-    "amount": 100
+  "tick": "bits",
+  "amount": 100
 }
 ```
 
@@ -65,30 +65,57 @@ Bitseed B
 
 ```json
 SFT {
-    "tick": "bits",
-    "amount": 200
+  "tick": "bits",
+  "amount": 200
 }
 ```
 
-A 和 B merge 后，得到
+合并A和B后,结果为
 
 ```json
 SFT {
-    "tick": "bits",
-    "amount": 300
+  "tick": "bits", 
+  "amount": 300
 }
 ```
 
-## Split操作
+合并流程:
+![Merge flow](/images/bitseed_merge_flow.png "Merge flow")
 
-Split操作使得一个Bitseed资产可以分裂为多个独立的资产。原始资产（C）被分裂成两个或多个资产（A、B），其属性保持不变，而数量根据分裂规则进行分配。
-Split操作需要将原始Inscription的UTXO输出到两个Output，并分别进行铭刻。    
+下表列出了Bitseed合并指令的属性:
+
+| 属性 | 描述 | 必需 |
+| ---------------------------------- | ----------------------------------------------------------------- | -------- | 
+| metaprotocol | 协议名称,必须为"bitseed" | 是 |
+| metadata.op | 操作名称,必须为"merge" | 是 |
+| metadata.tick | 类型,4-32个字符,不区分大小写 | 是 | 
+| metadata.amount | 合并后的数量,u64整数 | 是 |
+| metadata.original | 合并源SFT铭文ID列表 | 是 |
+| metadata.attributes | SFT属性,与原始铭文属性相同 | 否 |
+
+## 拆分操作  
+
+拆分操作允许将一个Bitseed资产分割成多个独立的资产。原始资产(C)被拆分为两个或多个资产(A, B),属性保持不变,而数量根据拆分规则进行分配。拆分操作需要将原始铭文的UTXO输出到两个Output并分别铭文。
 
 ```text
 C.amount > 1
-C.amount == A.amount + B.amount
+C.amount == A.amount + B.amount 
 A.tick = C.tick
 B.tick = C.tick
 A.attributes = C.attributes
 B.attributes = C.attributes
 ```
+
+拆分流程:
+![Split flow](/images/bitseed_split_flow.png "Split flow")
+
+下表列出了Bitseed拆分指令的属性:
+
+| 属性 | 描述 | 必需 | 
+| ---------------------------------- | ----------------------------------------------------------------- | -------- |
+| metaprotocol | 协议名称,必须为"bitseed" | 是 |
+| metadata.op | 操作名称,必须为"split" | 是 |
+| metadata.tick | 类型,4-32个字符,不区分大小写 | 是 |
+| metadata.amount | 部分数量,u64整数 | 是 | 
+| metadata.original | 拆分源SFT铭文ID列表,此操作只能有一个源SFT铭文 | 是 |
+| metadata.attributes | SFT属性,与原始铭文属性相同 | 否 |

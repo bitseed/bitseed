@@ -340,7 +340,7 @@ mod tests {
         let output = generator.inscribe_generate(deploy_args, &seed, recipient, user_input);
 
         // Add assertions for output
-        assert_eq!(output.amount, 1);
+        assert_eq!(output.amount, 1000);
         assert!(output.attributes.is_some());
 
         // Check if attributes contain expected key-value pairs

@@ -77,6 +77,22 @@ SFT {
 }
 ```
 
+Merge flow:
+
+![Merge flow](/images/bitseed_merge_flow.png "Merge flow")
+
+
+Below is a table listing the properties of the Bitseed merge instruction:
+
+| Attribute                          | Description                                                       | Required |
+| ---------------------------------- | ----------------------------------------------------------------- | -------- |
+| metaprotocol                       | Protocol name, must be "bitseed"                                  | Yes      |
+| metadata.op                        | Operation name, must be "merge"                                   | Yes      |
+| metadata.tick                      | Type, 4-32 characters, case-insensitive                           | Yes      |
+| metadata.amount                    | Amount after merge, an integer u64                                | Yes      |
+| metadata.original                  | Merge source SFT inscription ID list                              | Yes      |
+| metadata.attributes                | SFT attributes, same with original Inscription attributes         | No       |
+
 ## Split Operation
 
 The Split operation allows a Bitseed asset to be divided into multiple independent assets. The original asset (C) is split into two or more assets (A, B), with attributes remaining unchanged, while the quantity is distributed according to the split rules.
@@ -90,3 +106,19 @@ B.tick = C.tick
 A.attributes = C.attributes
 B.attributes = C.attributes
 ```
+
+Split flow:
+
+![Split flow](/images/bitseed_split_flow.png "Split flow")
+
+Below is a table listing the properties of the Bitseed split instruction:
+
+| Attribute                          | Description                                                       | Required |
+| ---------------------------------- | ----------------------------------------------------------------- | -------- |
+| metaprotocol                       | Protocol name, must be "bitseed"                                  | Yes      |
+| metadata.op                        | Operation name, must be "split"                                   | Yes      |
+| metadata.tick                      | Type, 4-32 characters, case-insensitive                           | Yes      |
+| metadata.amount                    | part amount, an integer u64                                       | Yes      |
+| metadata.original                  | Split source SFT inscription ID list, This operation has          | Yes      |
+|                                    | and can only have one source SFT inscription                      |          |
+| metadata.attributes                | SFT attributes, same with original Inscription attributes         | No       |

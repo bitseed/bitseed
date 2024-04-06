@@ -38,7 +38,7 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
         
     - name: Run unit tests
-      run: make unit_test
+      run: make unit-test
       
     - name: Set up Docker
       uses: docker-practice/actions-setup-docker@master
@@ -51,4 +51,4 @@ jobs:
         docker images
         
     - name: Run integration tests  
-      run: make integration_test
+      run: make integration-test

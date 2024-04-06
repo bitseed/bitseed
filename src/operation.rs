@@ -7,6 +7,10 @@ use ciborium::Value;
 use ord::Inscription;
 use serde::{Deserialize, Serialize};
 
+pub trait AsSFT {
+    fn as_sft(&self) -> SFT;
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeployRecord {
     pub tick: String,
@@ -40,14 +44,32 @@ pub struct MintRecord {
     pub sft: SFT,
 }
 
+impl AsSFT for MintRecord {
+    fn as_sft(&self) -> SFT {
+        self.sft.clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SplitRecord {
     pub sft: SFT,
 }
 
+impl AsSFT for SplitRecord {
+    fn as_sft(&self) -> SFT {
+        self.sft.clone()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MergeRecord {
     pub sft: SFT,
+}
+
+impl AsSFT for MergeRecord {
+    fn as_sft(&self) -> SFT {
+        self.sft.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -103,11 +125,31 @@ impl Operation {
                 }
                 builder.finish()
             }
-            Operation::Split(_record) => {
-                todo!()
+            Operation::Split(record) => {
+                let mut builder = InscriptionBuilder::new()
+                    .op(op.clone())
+                    .tick(record.sft.tick.clone())
+                    .amount(record.sft.amount);
+                if let Some(attributes) = record.sft.attributes {
+                    builder = builder.attributes(attributes);
+                }
+                if let Some(content) = record.sft.content {
+                    builder = builder.content(content)
+                }
+                builder.finish()
             }
-            Operation::Merge(_record) => {
-                todo!()
+            Operation::Merge(record) => {
+                let mut builder = InscriptionBuilder::new()
+                    .op(op.clone())
+                    .tick(record.sft.tick.clone())
+                    .amount(record.sft.amount);
+                if let Some(attributes) = record.sft.attributes {
+                    builder = builder.attributes(attributes);
+                }
+                if let Some(content) = record.sft.content {
+                    builder = builder.content(content)
+                }
+                builder.finish()
             }
         }
     }
@@ -153,7 +195,7 @@ impl Operation {
                     deploy_args,
                 )))
             }
-            "mint" => {
+            "mint" | "split" | "merge" => {
                 let attributes = bitseed_inscription.attributes();
                 let sft = SFT {
                     tick,
@@ -161,13 +203,15 @@ impl Operation {
                     attributes,
                     content,
                 };
-                Ok(Operation::Mint(MintRecord { sft }))
-            }
-            "split" => {
-                todo!()
-            }
-            "merge" => {
-                todo!()
+                
+                let op = match op.as_ref() {
+                    "mint" => Operation::Mint(MintRecord { sft }),
+                    "split" => Operation::Split(SplitRecord { sft }),
+                    "merge" => Operation::Merge(MergeRecord { sft }),
+                    _ => unreachable!(), // We already know it's one of the three.
+                };
+        
+                Ok(op)
             }
             _ => {
                 bail!("unknown op: {}", op)

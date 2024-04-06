@@ -1,3 +1,4 @@
+use crate::generator::wasm::wasm_generator::WASMGenerator;
 use crate::{sft::Content, wallet::Wallet, GENERATOR_TICK};
 use anyhow::{anyhow, bail, ensure, Result};
 use bitcoin::{hashes::Hash, Address, BlockHash};
@@ -5,7 +6,6 @@ use ord::InscriptionId;
 use primitive_types::H256;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use crate::generator::wasm::wasm_generator::WASMGenerator;
 
 pub(crate) mod hash;
 pub(crate) mod mock;
