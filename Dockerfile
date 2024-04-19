@@ -27,4 +27,4 @@ FROM debian:buster-slim
 COPY --from=builder /app/target/release/bitseed /usr/local/bin/bitseed
 
 # Set the default command of the container
-CMD ["bitseed"]
+ENTRYPOINT ["/usr/local/bin/bitseed"]
