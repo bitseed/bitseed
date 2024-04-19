@@ -29,5 +29,5 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 # Copy the compiled binary from the compilation stage
 COPY --from=builder /app/target/release/bitseed /usr/local/bin/bitseed
 
-# Set the default command of the container
+# Set the default ENTRYPOINT of the container
 ENTRYPOINT ["/usr/local/bin/bitseed"]
