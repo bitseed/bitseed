@@ -107,6 +107,7 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
     char * buffer_output = (char *)malloc(sizeof(char) * dump_len + 4);
     memcpy(buffer_output, length_bytes, 4);
     memcpy(buffer_output + 4, output, dump_len);
+    free(length_bytes);
 
     printf("inscribe_generate_end\n");
 
