@@ -1,5 +1,5 @@
 use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
-use bitcoin::{Address, BlockHash, OutPoint};
+use bitcoin::Address;
 use ciborium::Value;
 use serde_json;
 use serde_json::{Number, Value as JSONValue};
@@ -189,16 +189,6 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
     return (instance, store);
 }
 
-fn join_seeds(block_hash: BlockHash, utxo: OutPoint) -> String {
-    let seed_string = format!(
-        "{}{}{}",
-        block_hash.to_string(),
-        utxo.txid.to_string(),
-        utxo.vout.to_string()
-    );
-    seed_string
-}
-
 impl Generator for WASMGenerator {
     fn inscribe_generate(
         &self,
@@ -237,7 +227,7 @@ impl Generator for WASMGenerator {
             serde_json::Value::Array(attrs_buffer_vec),
         );
 
-        let seed = join_seeds(seed.block_hash, seed.utxo);
+        let seed = seed.seed().to_string();
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
         if user_input.is_some() {

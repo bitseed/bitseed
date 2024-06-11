@@ -10,7 +10,7 @@ pub const METADATA_AMOUNT: &str = "amount";
 pub const METADATA_ATTRIBUTES: &str = "attributes";
 pub const GENERATOR_TICK: &str = "generator";
 
-pub(crate) mod commands;
+pub mod commands;
 pub mod generator;
 pub mod inscribe;
 pub mod inscription;
@@ -48,7 +48,7 @@ where
 pub(crate) type SubcommandResult = Result<Box<dyn Output>>;
 
 #[derive(Subcommand)]
-enum Commands {
+pub enum Commands {
     Generator(commands::generator::GeneratorCommand),
     Deploy(commands::deploy::DeployCommand),
     Mint(commands::mint::MintCommand),
