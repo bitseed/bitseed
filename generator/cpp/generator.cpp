@@ -117,11 +117,9 @@ EMSCRIPTEN_KEEPALIVE const char * inscribe_generate(const char* buffer) {
 EMSCRIPTEN_KEEPALIVE bool inscribe_verify(const char* buffer, const char* inscribe_output_buffer) {
     const char *inscribe_output = inscribe_generate(buffer);
     uint32_t output_len = get_data_length(inscribe_output);
-    if (memcmp(inscribe_output+4, inscribe_output_buffer, output_len) == 0) {
-        return true;
-    } else {
-        return false;
-    }
+    bool result = memcmp(inscribe_output+4, inscribe_output_buffer, output_len) == 0;
+    free((void*)inscribe_output);  // Free the dynamically allocated memory
+    return result;
 }
 
 EMSCRIPTEN_KEEPALIVE const char * indexer_generate(const char* buffer) {
