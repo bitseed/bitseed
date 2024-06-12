@@ -1,7 +1,6 @@
 mod images;
 
 use std::panic;
-use backtrace::Backtrace;
 use std::time::Duration;
 
 use std::thread;
@@ -9,7 +8,7 @@ use std::sync::mpsc;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use cucumber::{given, then, when, World as _};
+use cucumber::{given, then, World as _};
 use jpst::TemplateContext;
 use serde_json::Value;
 use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}, RunnableImage};

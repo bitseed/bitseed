@@ -11,11 +11,11 @@ build:
 
 # Target for running unit tests
 unit-test:
-	RUST_LOG=debug RUST_BACKTRACE=full cargo test --lib
+	RUST_LOG=info RUST_BACKTRACE=full cargo test --lib
 
 # Target for running integration tests
 integration-test:
-	RUST_LOG=debug RUST_BACKTRACE=full cargo test --test '*'
+	RUST_LOG=info RUST_BACKTRACE=full cargo test --test '*'
 
 # Target for running all tests (unit and integration)
 test: unit-test integration-test
