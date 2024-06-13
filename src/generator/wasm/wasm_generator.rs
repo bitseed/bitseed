@@ -12,17 +12,6 @@ use tracing::{error, debug};
 use crate::sft;
 use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
 
-#[derive(Clone)]
-pub struct WASMGenerator {
-    bytecode: Vec<u8>,
-}
-
-impl WASMGenerator {
-    pub fn new(bytecode: Vec<u8>) -> Self {
-        Self { bytecode }
-    }
-}
-
 #[allow(dead_code)]
 #[derive(Clone)]
 struct Env {
@@ -191,25 +180,29 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
     return (instance, store);
 }
 
-impl Generator for WASMGenerator {
-    fn inscribe_generate(
+#[derive(Clone)]
+pub struct WASMGenerator {
+    bytecode: Vec<u8>,
+}
+
+impl WASMGenerator {
+    pub fn new(bytecode: Vec<u8>) -> Self {
+        Self { bytecode }
+    }
+
+    fn generate_buffer_final_ptr(
         &self,
-        deploy_args: Vec<String>,
+        deploy_args: &Vec<String>,
         seed: &InscribeSeed,
-        _recipient: Address,
         user_input: Option<String>,
-    ) -> InscribeGenerateOutput {
-        let (instance, mut store) = create_wasm_instance(&self.bytecode);
-        let stack_alloc_func = instance.exports.get_function("stackAlloc").unwrap();
-        let inscribe_generate = instance.exports.get_function("inscribe_generate").unwrap();
-
-        let memory_obj = instance.exports.get_memory("memory").unwrap();
-        let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
-
+        memory: &mut Arc<Mutex<Memory>>,
+        stack_alloc_func: &Function,
+        store: &mut Store,
+    ) -> i32 {
         let mut mint_args_json: Vec<JSONValue> = vec![];
         for arg in deploy_args.iter() {
             let arg_json: JSONValue =
-                serde_json::from_str(arg.as_str()).expect("serder_json unmarshal failed");
+                serde_json::from_str(arg.as_str()).expect("serde_json unmarshal failed");
             mint_args_json.push(arg_json);
         }
 
@@ -232,10 +225,10 @@ impl Generator for WASMGenerator {
         let seed = seed.seed().to_string();
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
-        if user_input.is_some() {
+        if let Some(input) = user_input {
             buffer_map.insert(
                 "user_input".to_string(),
-                serde_json::Value::String(user_input.unwrap()),
+                serde_json::Value::String(input),
             );
         }
 
@@ -247,11 +240,28 @@ impl Generator for WASMGenerator {
         buffer_final.append(&mut (top_buffer.len() as u32).to_be_bytes().to_vec());
         buffer_final.append(&mut top_buffer);
 
-        let buffer_final_ptr =
-            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, buffer_final.as_slice());
+        put_data_on_stack(memory, stack_alloc_func, store, buffer_final.as_slice())
+    }
+}
 
-        let func_args = 
-        vec![I32(buffer_final_ptr)];
+impl Generator for WASMGenerator {
+    fn inscribe_generate(
+        &self,
+        deploy_args: &Vec<String>,
+        seed: &InscribeSeed,
+        _recipient: &Address,
+        user_input: Option<String>,
+    ) -> InscribeGenerateOutput {
+        let (instance, mut store) = create_wasm_instance(&self.bytecode);
+        let stack_alloc_func = instance.exports.get_function("stackAlloc").unwrap();
+        let inscribe_generate = instance.exports.get_function("inscribe_generate").unwrap();
+
+        let memory_obj = instance.exports.get_memory("memory").unwrap();
+        let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
+
+        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
+
+        let func_args = vec![I32(buffer_final_ptr)];
 
         let calling_result = inscribe_generate
             .call(&mut store, func_args.as_slice())
@@ -271,17 +281,19 @@ impl Generator for WASMGenerator {
             .as_map()
             .expect("the return value from inscribe_generate is incorrect")
         {
-            if k.as_text().is_some() {
-                let key = k.as_text().unwrap().to_string();
-                if key == "amount" {
-                    let value = u128::try_from(v.as_integer().unwrap()).unwrap();
-                    inscribe_generate_output.amount = value as u64;
-                }
-                if key == "attributes" {
-                    inscribe_generate_output.attributes = Some(v.clone())
-                }
-                if key == "content" {
-                    inscribe_generate_output.content = build_content(v.clone())
+            if let Some(key) = k.as_text() {
+                match key {
+                    "amount" => {
+                        let value = u128::try_from(v.as_integer().unwrap()).unwrap();
+                        inscribe_generate_output.amount = value as u64;
+                    }
+                    "attributes" => {
+                        inscribe_generate_output.attributes = Some(v.clone());
+                    }
+                    "content" => {
+                        inscribe_generate_output.content = build_content(v.clone());
+                    }
+                    _ => {}
                 }
             }
         }
@@ -289,12 +301,11 @@ impl Generator for WASMGenerator {
         inscribe_generate_output
     }
 
-
     fn inscribe_verify(
         &self,
-        deploy_args: Vec<String>,
+        deploy_args: &Vec<String>,
         seed: &InscribeSeed,
-        _recipient: Address,
+        _recipient: &Address,
         user_input: Option<String>,
         inscribe_output: InscribeGenerateOutput,
     ) -> bool {
@@ -305,59 +316,13 @@ impl Generator for WASMGenerator {
         let memory_obj = instance.exports.get_memory("memory").unwrap();
         let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
 
-        let mut mint_args_json: Vec<JSONValue> = vec![];
-        for arg in deploy_args.iter() {
-            let arg_json: JSONValue =
-                serde_json::from_str(arg.as_str()).expect("serder_json unmarshal failed");
-            mint_args_json.push(arg_json);
-        }
+        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
 
-        let mint_args_array = JSONValue::Array(mint_args_json);
-        let mut cbor_buffer = Vec::new();
-        ciborium::into_writer(&mint_args_array, &mut cbor_buffer).expect("ciborium marshal failed");
-
-        let mut attrs_buffer_vec = Vec::new();
-        for byte in cbor_buffer.iter() {
-            attrs_buffer_vec.push(serde_json::Value::Number(Number::from(byte.clone())));
-        }
-
-        let mut buffer_map = serde_json::Map::new();
-
-        buffer_map.insert(
-            "attrs".to_string(),
-            serde_json::Value::Array(attrs_buffer_vec),
-        );
-
-        let seed = seed.seed().to_string();
-        buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
-
-        if user_input.is_some() {
-            buffer_map.insert(
-                "user_input".to_string(),
-                serde_json::Value::String(user_input.unwrap()),
-            );
-        }
-
-        let top_buffer_map = JSONValue::Object(buffer_map);
-        let mut top_buffer = Vec::new();
-        ciborium::into_writer(&top_buffer_map, &mut top_buffer).expect("ciborium marshal failed");
-
-        let mut buffer_final = Vec::new();
-        buffer_final.append(&mut (top_buffer.len() as u32).to_be_bytes().to_vec());
-        buffer_final.append(&mut top_buffer);
-
-        let buffer_final_ptr =
-            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, buffer_final.as_slice());
-
-        let mut inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
-        let mut inscribe_output_final = Vec::new();
-        inscribe_output_final.append(&mut (inscribe_output_bytes.len() as u32).to_be_bytes().to_vec());
-        inscribe_output_final.append(&mut inscribe_output_bytes);
+        let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
         let inscribe_output_final_ptr =
-        put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_final.as_slice());
+            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_bytes.as_slice());
 
-        let func_args = 
-        vec![I32(buffer_final_ptr), I32(inscribe_output_final_ptr)];
+        let func_args = vec![I32(buffer_final_ptr), I32(inscribe_output_final_ptr)];
 
         let calling_result = inscribe_verify
             .call(&mut store, func_args.as_slice())
@@ -489,7 +454,7 @@ mod tests {
         // User input
         let user_input = Some("test user input".to_string());
 
-        let output = generator.inscribe_generate(deploy_args, &seed, recipient, user_input);
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input);
 
         // Add assertions for output
         assert_eq!(output.amount, 1000);
@@ -541,10 +506,10 @@ mod tests {
         let user_input = Some("test user input".to_string());
 
         // Generate output using inscribe_generate
-        let output = generator.inscribe_generate(deploy_args.clone(), &seed, recipient.clone(), user_input.clone());
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
 
         // Verify the generated output using inscribe_verify
-        let is_valid = generator.inscribe_verify(deploy_args, &seed, recipient, user_input, output);
+        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
 
         // Add assertion to check if the output is valid
         assert!(is_valid, "The inscribe output should be valid");
