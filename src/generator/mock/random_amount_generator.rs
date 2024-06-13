@@ -22,4 +22,16 @@ impl Generator for RandomAmountGenerator {
             content: None,
         }
     }
+
+    fn inscribe_verify(
+        &self,
+        deploy_args: Vec<String>,
+        seed: &InscribeSeed,
+        recipient: Address,
+        user_input: Option<String>,
+        inscribe_output: crate::generator::InscribeGenerateOutput,
+    ) -> bool {
+        let output = self.inscribe_generate(deploy_args, seed, recipient, user_input);
+        output == inscribe_output
+    }
 }

@@ -83,10 +83,7 @@ pub trait Generator {
         recipient: Address,
         user_input: Option<String>,
         inscribe_output: InscribeGenerateOutput,
-    ) -> bool {
-        let output = self.inscribe_generate(deploy_args, seed, recipient, user_input);
-        output == inscribe_output
-    }
+    ) -> bool;
 
     fn has_indexer_generate(&self) -> bool {
         false
