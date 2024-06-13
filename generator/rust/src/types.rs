@@ -152,7 +152,7 @@ impl<'a, C> Decode<'a, C> for InputData {
 
 pub struct Content {
     pub content_type: String<MAX_STRING_LEN>,
-    pub content: Vec<u8, MAX_CONTENT_SIZE>,
+    pub body: Vec<u8, MAX_CONTENT_SIZE>,
 }
 
 impl<C> Encode<C> for Content {
@@ -166,8 +166,8 @@ impl<C> Encode<C> for Content {
       e.str("content_type")?;
       e.str(&self.content_type)?;
 
-      e.str("content")?;
-      e.bytes(&self.content)?;
+      e.str("body")?;
+      e.bytes(&self.body)?;
 
       Ok(())
   }

@@ -18,6 +18,22 @@ struct Env {
     memory: Option<Arc<Mutex<Memory>>>,
 }
 
+fn js_log(env: FunctionEnvMut<Env>, ptr: i32, len: i32) {
+    if let Some(memory_obj) = env.data().memory.clone() {
+        let memory = memory_obj.lock().expect("getting memory mutex failed");
+        let store_ref = env.as_store_ref();
+        let memory_view = memory.view(&store_ref);
+
+        let mut buffer = vec![0u8; len as usize];
+        memory_view
+            .read(ptr as u64, &mut buffer)
+            .expect("read buffer from memory failed");
+
+        let message = String::from_utf8_lossy(&buffer);
+        debug!("js_log_output: {}", message);
+    }
+}
+
 fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum: i32) -> i32 {
     let mut written_bytes = 0;
 
@@ -169,7 +185,10 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
             "fd_seek" => Function::new_typed_with_env(&mut store, &env, fd_seek),
             "fd_close" => Function::new_typed_with_env(&mut store, &env, fd_close),
             "proc_exit" => Function::new_typed_with_env(&mut store, &env, proc_exit),
-        }
+        },
+        "env" => {
+            "js_log" => Function::new_typed_with_env(&mut store, &env, js_log),
+        },
     };
 
     let instance = Instance::new(&mut store, &module, &import_object).unwrap();
@@ -479,6 +498,46 @@ mod tests {
     fn test_inscribe_verify() {
         // Read WASM binary from file
         let bytecode = read("./generator/cpp/generator.wasm").expect("failed to read WASM file");
+        let generator = WASMGenerator::new(bytecode);
+
+        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+
+        // Block hash
+        let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let block_hash_inner = sha256d::Hash::from_str(&block_hash_hex).unwrap();
+        let block_hash = BlockHash::from(block_hash_inner);
+
+        // Txid
+        let txid_hex = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+        let txid_inner = sha256d::Hash::from_str(&txid_hex).unwrap();
+        let txid = Txid::from(txid_inner);
+
+        let seed = InscribeSeed {
+            block_hash,
+            utxo: bitcoin::OutPoint::new(txid, 0),
+        };
+
+        // Recipient
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
+            .require_network(Network::Bitcoin).unwrap();
+
+        // User input
+        let user_input = Some("test user input".to_string());
+
+        // Generate output using inscribe_generate
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
+
+        // Verify the generated output using inscribe_verify
+        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
+
+        // Add assertion to check if the output is valid
+        assert!(is_valid, "The inscribe output should be valid");
+    }
+
+    #[test]
+    fn test_inscribe_verify_for_rust() {
+        // Read WASM binary from file
+        let bytecode = read("./generator/rust/pkg/generator_bg.wasm").expect("failed to read WASM file");
         let generator = WASMGenerator::new(bytecode);
 
         let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];

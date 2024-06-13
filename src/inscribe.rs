@@ -231,7 +231,7 @@ impl Inscriber {
 
         let sft = SFT {
             tick: deploy_record.tick,
-            amount: output.amount as u64,
+            amount: output.amount,
             attributes: output.attributes,
             content: output.content,
         };
