@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use wasmer::Value::I32;
 use wasmer::*;
 
-use tracing::{error, debug};
+use tracing::{error, debug, info};
 
 use crate::sft;
-use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
+use crate::generator::{Generator, InscribeGenerateOutput, Content, InscribeSeed};
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -241,10 +241,13 @@ impl WASMGenerator {
             serde_json::Value::Array(attrs_buffer_vec),
         );
 
-        let seed = seed.seed().to_string();
+        let seed = hex::encode(seed.seed());
+        info!("generate_buffer_final->seed_hex:{:?}", &seed);
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
         if let Some(input) = user_input {
+            info!("generate_buffer_final->user_input:{:?}", &input);
+
             buffer_map.insert(
                 "user_input".to_string(),
                 serde_json::Value::String(input),
@@ -337,7 +340,10 @@ impl Generator for WASMGenerator {
 
         let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
 
+        info!("inscribe_output: {:?}", &inscribe_output);
+
         let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
+        info!("inscribe_output_bytes: {:?}", hex::encode(inscribe_output_bytes.clone()));
         let inscribe_output_final_ptr =
             put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_bytes.as_slice());
 
@@ -572,5 +578,59 @@ mod tests {
 
         // Add assertion to check if the output is valid
         assert!(is_valid, "The inscribe output should be valid");
+    }
+
+    #[test]
+    fn test_inscribe_output_to_cbor() {
+        let mut attributes = Vec::new();
+        attributes.push((
+            ciborium::Value::Text("height".to_string()),
+            ciborium::Value::Integer(444.into()),
+        ));
+        attributes.push((
+            ciborium::Value::Text("id".to_string()),
+            ciborium::Value::Text("test user input".to_string()),
+        ));
+
+        let output = InscribeGenerateOutput {
+            amount: 1, 
+            attributes: Some(ciborium::Value::Map(attributes)), 
+            content: Some(
+                Content { 
+                    content_type: "text/plain".to_string(), 
+                    body: vec![104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33]
+                }
+            ) 
+        };
+
+        let cbor_bytes = inscribe_output_to_cbor(output);
+        let output_hex = hex::encode(cbor_bytes);
+
+        assert!(output_hex == "a366616d6f756e74016a61747472696275746573a2666865696768741901bc6269646f74657374207573657220696e70757467636f6e74656e74a26c636f6e74656e745f747970656a746578742f706c61696e64626f64794c68656c6c6f20776f726c6421", "The inscribe output should be valid");
+    }
+
+    #[test]
+    fn test_inscribe_output_to_cbor_without_body() {
+        let mut attributes = Vec::new();
+        attributes.push((
+            ciborium::Value::Text("height".to_string()),
+            ciborium::Value::Integer(444.into()),
+        ));
+        attributes.push((
+            ciborium::Value::Text("id".to_string()),
+            ciborium::Value::Text("test user input".to_string()),
+        ));
+
+        let output = InscribeGenerateOutput {
+            amount: 1, 
+            attributes: Some(ciborium::Value::Map(attributes)), 
+            content: None,
+        };
+
+        let cbor_bytes = inscribe_output_to_cbor(output);
+        let output_hex = hex::encode(cbor_bytes);
+        info!("output_hex22: {:?}", &output_hex);
+
+        assert!(output_hex == "a366616d6f756e74016a61747472696275746573a2666865696768741901bc6269646f74657374207573657220696e70757467636f6e74656e74a0", "The inscribe output should be valid");
     }
 }
