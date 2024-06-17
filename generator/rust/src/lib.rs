@@ -89,15 +89,15 @@ pub fn inscribe_generate_rust(input: &[u8]) -> Buffer<MAX_CONTENT_SIZE> {
         Value::String(input_data.user_input.clone()),
     );
 
-    let mut content: Vec<u8, MAX_CONTENT_SIZE> = Vec::new();
-    content.extend_from_slice("hello world!".as_bytes()).unwrap();
+    let mut body: Vec<u8, MAX_CONTENT_SIZE> = Vec::new();
+    body.extend_from_slice("hello world!".as_bytes()).unwrap();
 
     let output_data = OutputData {
         amount: 1,
         attributes: Some(json_output),
         content: Some(Content {
             content_type: String::<MAX_STRING_LEN>::try_from("text/plain").unwrap(),
-            content: content,
+            body: body,
         }),
     };
 

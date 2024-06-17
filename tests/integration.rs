@@ -1,7 +1,6 @@
 mod images;
 
 use std::panic;
-use backtrace::Backtrace;
 use std::time::Duration;
 
 use std::thread;
@@ -9,7 +8,7 @@ use std::sync::mpsc;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use cucumber::{given, then, when, World as _};
+use cucumber::{given, then, World as _};
 use jpst::TemplateContext;
 use serde_json::Value;
 use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}, RunnableImage};
@@ -127,7 +126,7 @@ fn ord_bash_run_cmd(w: &mut World, input_tpl: String) {
     let input = eval_command_args(tpl_ctx, input_tpl);
 
     let args: Vec<&str> = input.split_whitespace().collect();
-    let cmd_name = args[0].clone();
+    let cmd_name = args[0];
 
     bitseed_args.extend(args.iter().map(|&s| s.to_string()));
 
@@ -189,7 +188,7 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
     let input = eval_command_args(tpl_ctx, input_tpl);
 
     let args: Vec<&str> = input.split_whitespace().collect();
-    let cmd_name = args[0].clone();
+    let cmd_name = args[0];
 
     bitseed_args.extend(args.iter().map(|&s| s.to_string()));
 
@@ -254,7 +253,7 @@ fn bitcoincli_run_cmd(w: &mut World, input_tpl: String) {
     let input = eval_command_args(tpl_ctx, input_tpl);
 
     let args: Vec<&str> = input.split_whitespace().collect();
-    let cmd_name = args[0].clone();
+    let cmd_name = args[0];
 
     bitcoincli_args.extend(args.iter().map(|&s| s.to_string()));
 
@@ -326,7 +325,7 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
     let input = eval_command_args(tpl_ctx, input_tpl);
 
     let args: Vec<&str> = input.split_whitespace().collect();
-    let cmd_name = args[0].clone();
+    let cmd_name = args[0];
 
     bitseed_args.extend(args.iter().map(|&s| s.to_string()));
 
@@ -337,11 +336,26 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
 
     // fix bitseed ord client report error: Cannot drop a runtime in a context where blocking is not allowed. This happens when a runtime is dropped from within an asynchronous context.
     thread::spawn(move || {
-        let mut opts = BitseedCli::parse_from(bitseed_args);
-        opts.wallet_options.chain_options.regtest = true;
-        
-        let ret = bitseed::run(opts);
-        tx.send(ret).unwrap();
+        let result = std::panic::catch_unwind(|| {
+            let mut opts = BitseedCli::parse_from(bitseed_args);
+            opts.wallet_options.chain_options.regtest = true;
+            
+            bitseed::run(opts)
+        });
+
+        match result {
+            Ok(ret) => tx.send(ret).unwrap(),
+            Err(panic_info) => {
+                let err_msg = if let Some(s) = panic_info.downcast_ref::<&str>() {
+                    format!("Thread panicked with message: {}", s)
+                } else if let Some(s) = panic_info.downcast_ref::<String>() {
+                    format!("Thread panicked with message: {}", s)
+                } else {
+                    "Thread panicked with unknown message".to_string()
+                };
+                tx.send(Err(anyhow::anyhow!(err_msg))).unwrap();
+            }
+        }
     });
 
     let ret = rx.recv().unwrap();

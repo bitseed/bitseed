@@ -1,5 +1,4 @@
-use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
-use bitcoin::{Address, BlockHash, OutPoint};
+use bitcoin::Address;
 use ciborium::Value;
 use serde_json;
 use serde_json::{Number, Value as JSONValue};
@@ -10,21 +9,29 @@ use wasmer::*;
 
 use tracing::{error, debug};
 
-#[derive(Clone)]
-pub struct WASMGenerator {
-    bytecode: Vec<u8>,
-}
-
-impl WASMGenerator {
-    pub fn new(bytecode: Vec<u8>) -> Self {
-        Self { bytecode }
-    }
-}
+use crate::sft;
+use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
 
 #[allow(dead_code)]
 #[derive(Clone)]
 struct Env {
     memory: Option<Arc<Mutex<Memory>>>,
+}
+
+fn js_log(env: FunctionEnvMut<Env>, ptr: i32, len: i32) {
+    if let Some(memory_obj) = env.data().memory.clone() {
+        let memory = memory_obj.lock().expect("getting memory mutex failed");
+        let store_ref = env.as_store_ref();
+        let memory_view = memory.view(&store_ref);
+
+        let mut buffer = vec![0u8; len as usize];
+        memory_view
+            .read(ptr as u64, &mut buffer)
+            .expect("read buffer from memory failed");
+
+        let message = String::from_utf8_lossy(&buffer);
+        debug!("js_log_output: {}", message);
+    }
 }
 
 fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum: i32) -> i32 {
@@ -178,7 +185,10 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
             "fd_seek" => Function::new_typed_with_env(&mut store, &env, fd_seek),
             "fd_close" => Function::new_typed_with_env(&mut store, &env, fd_close),
             "proc_exit" => Function::new_typed_with_env(&mut store, &env, proc_exit),
-        }
+        },
+        "env" => {
+            "js_log" => Function::new_typed_with_env(&mut store, &env, js_log),
+        },
     };
 
     let instance = Instance::new(&mut store, &module, &import_object).unwrap();
@@ -189,35 +199,29 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
     return (instance, store);
 }
 
-fn join_seeds(block_hash: BlockHash, utxo: OutPoint) -> String {
-    let seed_string = format!(
-        "{}{}{}",
-        block_hash.to_string(),
-        utxo.txid.to_string(),
-        utxo.vout.to_string()
-    );
-    seed_string
+#[derive(Clone)]
+pub struct WASMGenerator {
+    bytecode: Vec<u8>,
 }
 
-impl Generator for WASMGenerator {
-    fn inscribe_generate(
+impl WASMGenerator {
+    pub fn new(bytecode: Vec<u8>) -> Self {
+        Self { bytecode }
+    }
+
+    fn generate_buffer_final_ptr(
         &self,
-        deploy_args: Vec<String>,
+        deploy_args: &Vec<String>,
         seed: &InscribeSeed,
-        _recipient: Address,
         user_input: Option<String>,
-    ) -> InscribeGenerateOutput {
-        let (instance, mut store) = create_wasm_instance(&self.bytecode);
-        let stack_alloc_func = instance.exports.get_function("stackAlloc").unwrap();
-        let inscribe_generate = instance.exports.get_function("inscribe_generate").unwrap();
-
-        let memory_obj = instance.exports.get_memory("memory").unwrap();
-        let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
-
+        memory: &mut Arc<Mutex<Memory>>,
+        stack_alloc_func: &Function,
+        store: &mut Store,
+    ) -> i32 {
         let mut mint_args_json: Vec<JSONValue> = vec![];
         for arg in deploy_args.iter() {
             let arg_json: JSONValue =
-                serde_json::from_str(arg.as_str()).expect("serder_json unmarshal failed");
+                serde_json::from_str(arg.as_str()).expect("serde_json unmarshal failed");
             mint_args_json.push(arg_json);
         }
 
@@ -237,13 +241,13 @@ impl Generator for WASMGenerator {
             serde_json::Value::Array(attrs_buffer_vec),
         );
 
-        let seed = join_seeds(seed.block_hash, seed.utxo);
+        let seed = seed.seed().to_string();
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
-        if user_input.is_some() {
+        if let Some(input) = user_input {
             buffer_map.insert(
                 "user_input".to_string(),
-                serde_json::Value::String(user_input.unwrap()),
+                serde_json::Value::String(input),
             );
         }
 
@@ -255,11 +259,28 @@ impl Generator for WASMGenerator {
         buffer_final.append(&mut (top_buffer.len() as u32).to_be_bytes().to_vec());
         buffer_final.append(&mut top_buffer);
 
-        let buffer_final_ptr =
-            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, buffer_final.as_slice());
+        put_data_on_stack(memory, stack_alloc_func, store, buffer_final.as_slice())
+    }
+}
 
-        let func_args = 
-        vec![I32(buffer_final_ptr)];
+impl Generator for WASMGenerator {
+    fn inscribe_generate(
+        &self,
+        deploy_args: &Vec<String>,
+        seed: &InscribeSeed,
+        _recipient: &Address,
+        user_input: Option<String>,
+    ) -> InscribeGenerateOutput {
+        let (instance, mut store) = create_wasm_instance(&self.bytecode);
+        let stack_alloc_func = instance.exports.get_function("stackAlloc").unwrap();
+        let inscribe_generate = instance.exports.get_function("inscribe_generate").unwrap();
+
+        let memory_obj = instance.exports.get_memory("memory").unwrap();
+        let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
+
+        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
+
+        let func_args = vec![I32(buffer_final_ptr)];
 
         let calling_result = inscribe_generate
             .call(&mut store, func_args.as_slice())
@@ -279,20 +300,135 @@ impl Generator for WASMGenerator {
             .as_map()
             .expect("the return value from inscribe_generate is incorrect")
         {
-            if k.as_text().is_some() {
-                let key = k.as_text().unwrap().to_string();
-                if key == "amount" {
-                    let value = u128::try_from(v.as_integer().unwrap()).unwrap();
-                    inscribe_generate_output.amount = value as u64;
-                }
-                if key == "attributes" {
-                    inscribe_generate_output.attributes = Some(v.clone())
+            if let Some(key) = k.as_text() {
+                match key {
+                    "amount" => {
+                        let value = u128::try_from(v.as_integer().unwrap()).unwrap();
+                        inscribe_generate_output.amount = value as u64;
+                    }
+                    "attributes" => {
+                        inscribe_generate_output.attributes = Some(v.clone());
+                    }
+                    "content" => {
+                        inscribe_generate_output.content = build_content(v.clone());
+                    }
+                    _ => {}
                 }
             }
         }
 
         inscribe_generate_output
     }
+
+    fn inscribe_verify(
+        &self,
+        deploy_args: &Vec<String>,
+        seed: &InscribeSeed,
+        _recipient: &Address,
+        user_input: Option<String>,
+        inscribe_output: InscribeGenerateOutput,
+    ) -> bool {
+        let (instance, mut store) = create_wasm_instance(&self.bytecode);
+        let stack_alloc_func = instance.exports.get_function("stackAlloc").unwrap();
+        let inscribe_verify = instance.exports.get_function("inscribe_verify").unwrap();
+
+        let memory_obj = instance.exports.get_memory("memory").unwrap();
+        let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
+
+        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
+
+        let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
+        let inscribe_output_final_ptr =
+            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_bytes.as_slice());
+
+        let func_args = vec![I32(buffer_final_ptr), I32(inscribe_output_final_ptr)];
+
+        let calling_result = inscribe_verify
+            .call(&mut store, func_args.as_slice())
+            .expect("call inscribe_verify failed");
+
+        let return_value = calling_result.deref().get(0).unwrap();
+        return_value.i32().unwrap() == 1
+    }
+}
+
+fn build_content(v: ciborium::Value) -> Option<sft::Content> {
+    // Check if the Value is a map
+    if let ciborium::Value::Map(map) = v {
+        // Initialize variables to store content-type and body
+        let mut content_type: Option<String> = None;
+        let mut body: Option<Vec<u8>> = None;
+
+        // Iterate through the map to find content-type and body
+        for (key, value) in map {
+            if let ciborium::Value::Text(key_str) = key {
+                match key_str.as_str() {
+                    "content_type" => {
+                        if let ciborium::Value::Text(ct) = value {
+                            content_type = Some(ct);
+                        }
+                    }
+                    "body" => {
+                        if let ciborium::Value::Bytes(b) = value {
+                            body = Some(b);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        // If both content-type and body exist, construct sft::Content
+        if let (Some(ct), Some(b)) = (content_type, body) {
+            return Some(sft::Content::new(ct, b));
+        }
+    }
+
+    // Return None if content-type or body is missing
+    None
+}
+
+fn inscribe_output_to_cbor(inscribe_output: InscribeGenerateOutput) -> Vec<u8> {
+    // Create a map to hold the CBOR representation
+    let mut map = Vec::new();
+
+    // Add amount to the map
+    map.push((
+        ciborium::Value::Text("amount".to_string()),
+        ciborium::Value::Integer(inscribe_output.amount.into()),
+    ));
+
+    // Add attributes to the map if they exist
+    if let Some(attributes) = inscribe_output.attributes {
+        map.push((
+            ciborium::Value::Text("attributes".to_string()),
+            attributes,
+        ));
+    }
+
+    // Add content to the map if it exists
+    let mut content_map = Vec::new();
+    
+    if let Some(content) = inscribe_output.content {
+        content_map.push((
+            ciborium::Value::Text("content_type".to_string()),
+            ciborium::Value::Text(content.content_type),
+        ));
+        content_map.push((
+            ciborium::Value::Text("body".to_string()),
+            ciborium::Value::Bytes(content.body),
+        ));
+    }
+
+    map.push((
+        ciborium::Value::Text("content".to_string()),
+        ciborium::Value::Map(content_map),
+    ));
+
+    // Serialize the map to CBOR bytes
+    let mut buffer = Vec::new();
+    ciborium::ser::into_writer(&ciborium::Value::Map(map), &mut buffer).expect("Failed to serialize to CBOR");
+    buffer
 }
 
 #[cfg(test)]
@@ -337,7 +473,7 @@ mod tests {
         // User input
         let user_input = Some("test user input".to_string());
 
-        let output = generator.inscribe_generate(deploy_args, &seed, recipient, user_input);
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input);
 
         // Add assertions for output
         assert_eq!(output.amount, 1000);
@@ -356,5 +492,85 @@ mod tests {
         let height = height_value.as_integer().unwrap();
         assert!(height.try_into().unwrap_or(0) >= 1);
         assert!(height.try_into().unwrap_or(i128::MAX) <= 1000);
+    }
+
+    #[test]
+    fn test_inscribe_verify() {
+        // Read WASM binary from file
+        let bytecode = read("./generator/cpp/generator.wasm").expect("failed to read WASM file");
+        let generator = WASMGenerator::new(bytecode);
+
+        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+
+        // Block hash
+        let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let block_hash_inner = sha256d::Hash::from_str(&block_hash_hex).unwrap();
+        let block_hash = BlockHash::from(block_hash_inner);
+
+        // Txid
+        let txid_hex = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+        let txid_inner = sha256d::Hash::from_str(&txid_hex).unwrap();
+        let txid = Txid::from(txid_inner);
+
+        let seed = InscribeSeed {
+            block_hash,
+            utxo: bitcoin::OutPoint::new(txid, 0),
+        };
+
+        // Recipient
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
+            .require_network(Network::Bitcoin).unwrap();
+
+        // User input
+        let user_input = Some("test user input".to_string());
+
+        // Generate output using inscribe_generate
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
+
+        // Verify the generated output using inscribe_verify
+        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
+
+        // Add assertion to check if the output is valid
+        assert!(is_valid, "The inscribe output should be valid");
+    }
+
+    #[test]
+    fn test_inscribe_verify_for_rust() {
+        // Read WASM binary from file
+        let bytecode = read("./generator/rust/pkg/generator_bg.wasm").expect("failed to read WASM file");
+        let generator = WASMGenerator::new(bytecode);
+
+        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+
+        // Block hash
+        let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let block_hash_inner = sha256d::Hash::from_str(&block_hash_hex).unwrap();
+        let block_hash = BlockHash::from(block_hash_inner);
+
+        // Txid
+        let txid_hex = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+        let txid_inner = sha256d::Hash::from_str(&txid_hex).unwrap();
+        let txid = Txid::from(txid_inner);
+
+        let seed = InscribeSeed {
+            block_hash,
+            utxo: bitcoin::OutPoint::new(txid, 0),
+        };
+
+        // Recipient
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
+            .require_network(Network::Bitcoin).unwrap();
+
+        // User input
+        let user_input = Some("test user input".to_string());
+
+        // Generate output using inscribe_generate
+        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
+
+        // Verify the generated output using inscribe_verify
+        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
+
+        // Add assertion to check if the output is valid
+        assert!(is_valid, "The inscribe output should be valid");
     }
 }

@@ -227,7 +227,7 @@ impl Inscriber {
         let destination = self.destination.clone();
 
         let output =
-            generator.inscribe_generate(deploy_record.deploy_args, &seed, destination, user_input);
+            generator.inscribe_generate(&deploy_record.deploy_args, &seed, &destination, user_input);
 
         let sft = SFT {
             tick: deploy_record.tick,

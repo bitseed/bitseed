@@ -1,4 +1,3 @@
-use std::time::Duration;
 use std::collections::HashMap;
 
 use testcontainers::{
@@ -59,7 +58,7 @@ impl Image for Ord {
         Box::new(self.env_vars.iter())
     }
 
-    fn exec_after_start(&self, cs: ContainerState) -> Vec<ExecCommand> {
+    fn exec_after_start(&self, _cs: ContainerState) -> Vec<ExecCommand> {
         vec![ExecCommand{
             cmd:  "/bin/rm -rf /data/.bitcoin/regtest/wallets/ord".to_owned(),
             ready_conditions: vec![WaitFor::Nothing],
