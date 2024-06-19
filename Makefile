@@ -3,7 +3,7 @@ SRC_DIR := src
 
 DOCKER_USERNAME := bitseed
 DOCKER_IMAGE_NAME := $(DOCKER_USERNAME)/$(PROJECT_NAME)
-DOCKER_IMAGE_TAG := 0.1.5-debug1
+DOCKER_IMAGE_TAG := 0.1.5-debug6
 
 # Target for building the project
 build:

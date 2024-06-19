@@ -236,6 +236,8 @@ impl WASMGenerator {
 
         let mut buffer_map = serde_json::Map::new();
 
+        info!("generate_buffer_final->deploy_args:{:?}", &deploy_args);
+
         buffer_map.insert(
             "attrs".to_string(),
             serde_json::Value::Array(attrs_buffer_vec),
@@ -261,6 +263,9 @@ impl WASMGenerator {
         let mut buffer_final = Vec::new();
         buffer_final.append(&mut (top_buffer.len() as u32).to_be_bytes().to_vec());
         buffer_final.append(&mut top_buffer);
+
+        let hex_buffer = hex::encode(buffer_final.clone());
+        info!("generate_buffer_final->buffer_final:{:?}", hex_buffer);
 
         put_data_on_stack(memory, stack_alloc_func, store, buffer_final.as_slice())
     }
@@ -319,6 +324,11 @@ impl Generator for WASMGenerator {
                 }
             }
         }
+
+        info!("inscribe_generate output: {:?}", &inscribe_generate_output);
+
+        let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_generate_output.clone());
+        info!("inscribe_output_bytes: {:?}", hex::encode(inscribe_output_bytes));
 
         inscribe_generate_output
     }
