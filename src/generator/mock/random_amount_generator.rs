@@ -7,14 +7,14 @@ pub struct RandomAmountGenerator;
 impl Generator for RandomAmountGenerator {
     fn inscribe_generate(
         &self,
-        deploy_args: &Vec<String>,
+        _deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         _recipient: &Address,
         _user_input: Option<String>,
     ) -> crate::generator::InscribeGenerateOutput {
         let hash = seed.seed();
-        let min = deploy_args[0].parse::<u64>().unwrap();
-        let max = deploy_args[1].parse::<u64>().unwrap();
+        let min = 1;
+        let max = 100;
         let amount = (U256::from_little_endian(hash.as_bytes()) % (max - min) + min).as_u64();
         crate::generator::InscribeGenerateOutput {
             amount,
@@ -25,7 +25,7 @@ impl Generator for RandomAmountGenerator {
 
     fn inscribe_verify(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         recipient: &Address,
         user_input: Option<String>,

@@ -7,6 +7,10 @@ use ciborium::Value;
 use ord::Inscription;
 use serde::{Deserialize, Serialize};
 
+use serde_json;
+use serde_json::Value as JSONValue;
+use std::io::Cursor;
+
 pub trait AsSFT {
     fn as_sft(&self) -> SFT;
 }
@@ -18,7 +22,7 @@ pub struct DeployRecord {
     pub amount: u64,
     pub generator: String,
     pub repeat: u64,
-    pub deploy_args: Vec<String>,
+    pub deploy_args: Vec<u8>,
 }
 
 impl DeployRecord {
@@ -27,7 +31,7 @@ impl DeployRecord {
         amount: u64,
         generator: String,
         repeat: u64,
-        deploy_args: Vec<String>,
+        deploy_args: Vec<u8>,
     ) -> Self {
         Self {
             tick,
@@ -85,6 +89,9 @@ impl Operation {
         let op = self.op();
         match self {
             Operation::Deploy(record) => {
+                let cursor = Cursor::new(record.deploy_args);
+                let cbor_value: Value = ciborium::from_reader(cursor).unwrap();
+
                 let attributes = ciborium::Value::Map(vec![
                     (
                         Value::Text("generator".to_string()),
@@ -96,13 +103,7 @@ impl Operation {
                     ),
                     (
                         Value::Text("deploy_args".to_string()),
-                        Value::Array(
-                            record
-                                .deploy_args
-                                .into_iter()
-                                .map(|s| Value::Text(s))
-                                .collect(),
-                        ),
+                        cbor_value,
                     ),
                 ]);
                 InscriptionBuilder::new()
@@ -175,18 +176,13 @@ impl Operation {
                     .as_integer()
                     .ok_or_else(|| anyhow!("repeat is not an integer"))?
                     .try_into()?;
-                let deploy_args = bitseed_inscription
+                let deploy_args_value = bitseed_inscription
                     .get_attribute("deploy_args")
-                    .ok_or_else(|| anyhow!("missing deploy_args"))?
-                    .as_array()
-                    .ok_or_else(|| anyhow!("deploy_args is not an array"))?
-                    .iter()
-                    .map(|v| {
-                        v.as_text()
-                            .map(|v| v.to_string())
-                            .ok_or_else(|| anyhow!("deploy_args is not an array of strings"))
-                    })
-                    .collect::<Result<Vec<String>>>()?;
+                    .ok_or_else(|| anyhow!("missing deploy_args"))?;
+                   
+                let mut deploy_args = Vec::new();
+                ciborium::into_writer(&deploy_args_value, &mut deploy_args).expect("ciborium marshal failed");
+
                 Ok(Operation::Deploy(DeployRecord::new_deploy_record(
                     tick,
                     amount,
@@ -271,4 +267,19 @@ impl Operation {
             Operation::Merge(_) => "merge".to_string(),
         }
     }
+}
+
+pub fn deploy_args_cbor_encode(deploy_args: Vec<String>) -> Vec<u8> {
+    let mut mint_args_json: Vec<JSONValue> = vec![];
+
+    for arg in deploy_args.iter() {
+        let arg_json: JSONValue =
+            serde_json::from_str(arg.as_str()).expect("serde_json unmarshal failed");
+        mint_args_json.push(arg_json);
+    }
+
+    let mint_args_array = JSONValue::Array(mint_args_json);
+    let mut cbor_buffer = Vec::new();
+    ciborium::into_writer(&mint_args_array, &mut cbor_buffer).expect("ciborium marshal failed");
+    cbor_buffer
 }

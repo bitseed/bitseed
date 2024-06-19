@@ -211,26 +211,15 @@ impl WASMGenerator {
 
     fn generate_buffer_final_ptr(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         user_input: Option<String>,
         memory: &mut Arc<Mutex<Memory>>,
         stack_alloc_func: &Function,
         store: &mut Store,
     ) -> i32 {
-        let mut mint_args_json: Vec<JSONValue> = vec![];
-        for arg in deploy_args.iter() {
-            let arg_json: JSONValue =
-                serde_json::from_str(arg.as_str()).expect("serde_json unmarshal failed");
-            mint_args_json.push(arg_json);
-        }
-
-        let mint_args_array = JSONValue::Array(mint_args_json);
-        let mut cbor_buffer = Vec::new();
-        ciborium::into_writer(&mint_args_array, &mut cbor_buffer).expect("ciborium marshal failed");
-
         let mut attrs_buffer_vec = Vec::new();
-        for byte in cbor_buffer.iter() {
+        for byte in deploy_args.iter() {
             attrs_buffer_vec.push(serde_json::Value::Number(Number::from(byte.clone())));
         }
 
@@ -274,7 +263,7 @@ impl WASMGenerator {
 impl Generator for WASMGenerator {
     fn inscribe_generate(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         _recipient: &Address,
         user_input: Option<String>,
@@ -335,7 +324,7 @@ impl Generator for WASMGenerator {
 
     fn inscribe_verify(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         _recipient: &Address,
         user_input: Option<String>,
@@ -456,6 +445,7 @@ mod tests {
     use std::fs::read;
     use std::str::FromStr;
     use env_logger;
+    use crate::operation::deploy_args_cbor_encode;
      
     #[test]
     fn test_inscribe_generate_normal() {
@@ -466,6 +456,7 @@ mod tests {
         let generator = WASMGenerator::new(bytecode);
 
         let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
         let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
@@ -517,6 +508,7 @@ mod tests {
         let generator = WASMGenerator::new(bytecode);
 
         let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
         let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
@@ -557,6 +549,7 @@ mod tests {
         let generator = WASMGenerator::new(bytecode);
 
         let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
         let block_hash_hex = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";

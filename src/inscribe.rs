@@ -184,7 +184,7 @@ impl Inscriber {
         amount: u64,
         generator: InscriptionId,
         repeat: u64,
-        deploy_args: Vec<String>,
+        deploy_args: Vec<u8>,
     ) -> Result<Self> {
         //TODO check the generator exists.
         let deploy_record = DeployRecord {
