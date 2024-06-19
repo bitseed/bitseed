@@ -353,6 +353,8 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
                 } else {
                     "Thread panicked with unknown message".to_string()
                 };
+
+                debug!("bitseed_run_cmd error:{:?}", &panic_info);
                 tx.send(Err(anyhow::anyhow!(err_msg))).unwrap();
             }
         }

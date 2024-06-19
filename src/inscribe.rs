@@ -31,6 +31,8 @@ use {
     std::{collections::BTreeMap, path::Path},
 };
 
+use tracing::debug;
+
 const TARGET_POSTAGE: Amount = Amount::from_sat(10_000);
 
 #[derive(Debug, Clone, Parser)]
@@ -161,12 +163,16 @@ impl Inscriber {
     where
         P: AsRef<Path>,
     {
+        debug!("with_generator 1");
+
         let bytecode = std::fs::read(generator_program)?;
         let content = Content::new(generator::CONTENT_TYPE.to_string(), bytecode);
         let attributes = Value::Map(vec![(
             Value::Text("name".to_string()),
             Value::Text(generator_name.clone().into()),
         )]);
+
+        debug!("with_generator 2");
         let mint_record = MintRecord {
             sft: SFT {
                 tick: GENERATOR_TICK.to_string(),
@@ -175,6 +181,8 @@ impl Inscriber {
                 content: Some(content),
             },
         };
+
+        debug!("with_generator 3");
         Ok(self.with_operation(Operation::Mint(mint_record)))
     }
 

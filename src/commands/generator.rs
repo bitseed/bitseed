@@ -5,6 +5,8 @@ use crate::SubcommandResult;
 use clap::Parser;
 use std::path::PathBuf;
 
+use tracing::debug;
+
 /// Inscribe a new generator bytecode to Bitcoin
 #[derive(Debug, Parser)]
 pub struct GeneratorCommand {
@@ -18,6 +20,8 @@ pub struct GeneratorCommand {
 
 impl GeneratorCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
+        debug!("GeneratorCommand 1");
+
         let output = Inscriber::new(wallet, self.inscribe_options)?
             .with_generator(self.name, self.generator)?
             .inscribe()?;
