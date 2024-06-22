@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use wasmer::Value::I32;
 use wasmer::*;
 
-use tracing::{error, debug, info};
+use tracing::{error, debug};
 
 use crate::sft;
 use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
@@ -224,21 +224,15 @@ impl WASMGenerator {
         }
 
         let mut buffer_map = serde_json::Map::new();
-
-        info!("generate_buffer_final->deploy_args:{:?}", &deploy_args);
-
         buffer_map.insert(
             "attrs".to_string(),
             serde_json::Value::Array(attrs_buffer_vec),
         );
 
         let seed = hex::encode(seed.seed());
-        info!("generate_buffer_final->seed_hex:{:?}", &seed);
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
         if let Some(input) = user_input {
-            info!("generate_buffer_final->user_input:{:?}", &input);
-
             buffer_map.insert(
                 "user_input".to_string(),
                 serde_json::Value::String(input),
@@ -252,9 +246,6 @@ impl WASMGenerator {
         let mut buffer_final = Vec::new();
         buffer_final.append(&mut (top_buffer.len() as u32).to_be_bytes().to_vec());
         buffer_final.append(&mut top_buffer);
-
-        let hex_buffer = hex::encode(buffer_final.clone());
-        info!("generate_buffer_final->buffer_final:{:?}", hex_buffer);
 
         put_data_on_stack(memory, stack_alloc_func, store, buffer_final.as_slice())
     }
@@ -314,11 +305,6 @@ impl Generator for WASMGenerator {
             }
         }
 
-        info!("inscribe_generate output: {:?}", &inscribe_generate_output);
-
-        let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_generate_output.clone());
-        info!("inscribe_output_bytes: {:?}", hex::encode(inscribe_output_bytes));
-
         inscribe_generate_output
     }
 
@@ -339,10 +325,7 @@ impl Generator for WASMGenerator {
 
         let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
 
-        info!("inscribe_output: {:?}", &inscribe_output);
-
         let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
-        info!("inscribe_output_bytes: {:?}", hex::encode(inscribe_output_bytes.clone()));
         let inscribe_output_final_ptr =
             put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_bytes.as_slice());
 
@@ -446,6 +429,7 @@ mod tests {
     use std::str::FromStr;
     use env_logger;
     use crate::operation::deploy_args_cbor_encode;
+    use crate::generator::Content;
      
     #[test]
     fn test_inscribe_generate_normal() {
@@ -632,7 +616,6 @@ mod tests {
 
         let cbor_bytes = inscribe_output_to_cbor(output);
         let output_hex = hex::encode(cbor_bytes);
-        info!("output_hex22: {:?}", &output_hex);
 
         assert!(output_hex == "a366616d6f756e74016a61747472696275746573a2666865696768741901bc6269646f74657374207573657220696e70757467636f6e74656e74a0", "The inscribe output should be valid");
     }

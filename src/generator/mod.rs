@@ -11,8 +11,6 @@ pub(crate) mod hash;
 pub(crate) mod mock;
 pub mod wasm;
 
-use tracing::{info};
-
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct InscribeGenerateOutput {
     pub amount: u64,
@@ -38,14 +36,11 @@ impl InscribeSeed {
 
     pub fn seed(&self) -> H256 {
         let mut buffer = self.block_hash.as_byte_array().to_vec();
-        info!("block_hash_hex:{:?}", hex::encode(buffer.clone()));
 
         let txid_bytes = self.utxo.txid.as_byte_array();
-        info!("txid_bytes:{:?}", hex::encode(txid_bytes.clone()));
         buffer.extend_from_slice(txid_bytes);
 
         let vout_bytes = self.utxo.vout.to_le_bytes();
-        info!("vout_bytes:{:?}", hex::encode(vout_bytes.clone()));
         buffer.extend_from_slice(&vout_bytes);
 
         hash::sha3_256_of(buffer.as_slice())
