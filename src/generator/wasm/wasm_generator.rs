@@ -10,7 +10,7 @@ use wasmer::*;
 use tracing::{error, debug, info};
 
 use crate::sft;
-use crate::generator::{Generator, InscribeGenerateOutput, Content, InscribeSeed};
+use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
 
 #[allow(dead_code)]
 #[derive(Clone)]

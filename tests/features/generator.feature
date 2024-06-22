@@ -46,7 +46,7 @@ Feature: Bitseed CLI integration tests
     # mine a block
     Then cmd ord: "wallet receive"
     Then cmd bitcoin-cli: "generatetoaddress 1 {{$.wallet[-1].address}}"
-    Then sleep: "10"
+    Then sleep: "30"
 
     # merge 
     Then cmd bitseed: "merge --fee-rate 1 --sft-inscription-ids {{$.split[-1].inscriptions[0].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[1].Id}} --sft-inscription-ids {{$.split[-1].inscriptions[2].Id}}"
