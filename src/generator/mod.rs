@@ -36,8 +36,13 @@ impl InscribeSeed {
 
     pub fn seed(&self) -> H256 {
         let mut buffer = self.block_hash.as_byte_array().to_vec();
-        buffer.extend_from_slice(self.utxo.txid.as_byte_array());
-        buffer.extend_from_slice(&self.utxo.vout.to_le_bytes());
+
+        let txid_bytes = self.utxo.txid.as_byte_array();
+        buffer.extend_from_slice(txid_bytes);
+
+        let vout_bytes = self.utxo.vout.to_le_bytes();
+        buffer.extend_from_slice(&vout_bytes);
+
         hash::sha3_256_of(buffer.as_slice())
     }
 }
@@ -70,7 +75,7 @@ pub const CONTENT_TYPE: &'static str = "application/wasm";
 pub trait Generator {
     fn inscribe_generate(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         recipient: &Address,
         user_input: Option<String>,
@@ -78,7 +83,7 @@ pub trait Generator {
 
     fn inscribe_verify(
         &self,
-        deploy_args: &Vec<String>,
+        deploy_args: &Vec<u8>,
         seed: &InscribeSeed,
         recipient: &Address,
         user_input: Option<String>,
@@ -91,7 +96,7 @@ pub trait Generator {
 
     fn indexer_generate(
         &self,
-        _deploy_args: Vec<String>,
+        _deploy_args: Vec<u8>,
         _seed: &IndexerSeed,
         _recipient: Address,
     ) -> IndexerGenerateOutput {
@@ -119,7 +124,7 @@ impl StaticGenerator {
 impl Generator for StaticGenerator {
     fn inscribe_generate(
         &self,
-        _deploy_args: &Vec<String>,
+        _deploy_args: &Vec<u8>,
         _seed: &InscribeSeed,
         _recipient: &Address,
         _user_input: Option<String>,
@@ -129,7 +134,7 @@ impl Generator for StaticGenerator {
 
     fn inscribe_verify(
         &self,
-        _deploy_args: &Vec<String>,
+        _deploy_args: &Vec<u8>,
         _seed: &InscribeSeed,
         _recipient: &Address,
         _user_input: Option<String>,
@@ -144,7 +149,7 @@ impl Generator for StaticGenerator {
 
     fn indexer_generate(
         &self,
-        _deploy_args: Vec<String>,
+        _deploy_args: Vec<u8>,
         _seed: &IndexerSeed,
         _recipient: Address,
     ) -> IndexerGenerateOutput {
@@ -187,7 +192,6 @@ impl GeneratorLoader {
             content.content_type
         );
         let wasm_bytecode = &content.body;
-        //TODO load generator from Inscription
         Ok(Box::new(WASMGenerator::new(wasm_bytecode.clone())))
     }
 }

@@ -167,6 +167,7 @@ impl Inscriber {
             Value::Text("name".to_string()),
             Value::Text(generator_name.clone().into()),
         )]);
+
         let mint_record = MintRecord {
             sft: SFT {
                 tick: GENERATOR_TICK.to_string(),
@@ -175,6 +176,7 @@ impl Inscriber {
                 content: Some(content),
             },
         };
+
         Ok(self.with_operation(Operation::Mint(mint_record)))
     }
 
@@ -184,7 +186,7 @@ impl Inscriber {
         amount: u64,
         generator: InscriptionId,
         repeat: u64,
-        deploy_args: Vec<String>,
+        deploy_args: Vec<u8>,
     ) -> Result<Self> {
         //TODO check the generator exists.
         let deploy_record = DeployRecord {

@@ -2,6 +2,8 @@ use crate::inscribe::InscribeOptions;
 use crate::inscribe::Inscriber;
 use crate::wallet::Wallet;
 use crate::SubcommandResult;
+use crate::operation::deploy_args_cbor_encode;
+
 use clap::Parser;
 use ord::InscriptionId;
 
@@ -32,6 +34,8 @@ pub struct DeployCommand {
 
 impl DeployCommand {
     pub fn run(self, wallet: Wallet) -> SubcommandResult {
+        let deploy_args = deploy_args_cbor_encode(self.deploy_args);
+
         //TODO check the tick name is valid
         let tick = self.tick.to_uppercase();
         let output = Inscriber::new(wallet, self.inscribe_options)?
@@ -40,7 +44,7 @@ impl DeployCommand {
                 self.amount,
                 self.generator,
                 self.repeat,
-                self.deploy_args,
+                deploy_args,
             )?
             .inscribe()?;
         Ok(Box::new(output))
