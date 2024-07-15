@@ -6,7 +6,7 @@
 2. Compile and install bitseed via run `cargo install --path .` in the bitseed directory.
 3. Export a command alias to run bitseed command.
 ```bash
-alias bitseed="bitseed --regtest --rpc-url http://127.0.0.1:18443 --bitcoin-rpc-user roochuser --bitcoin-rpc-pass roochpass"
+alias bitseed="bitseed --regtest --bitcoin-rpc-url http://127.0.0.1:18443 --bitcoin-rpc-username roochuser --bitcoin-rpc-password roochpass"
 ```
 
 ## Usage
