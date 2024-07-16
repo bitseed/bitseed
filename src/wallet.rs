@@ -6,8 +6,6 @@ use bitcoin::TxOut;
 use bitcoincore_rpc::RpcApi;
 use clap::Parser;
 use ord::inscriptions::ParsedEnvelope;
-use ord::templates::inscription::InscriptionJson;
-use ord::templates::status::StatusJson;
 use ord::Chain;
 use ord::InscriptionId;
 use ord::Options;
@@ -41,31 +39,40 @@ pub struct Wallet {
 
 impl Wallet {
     pub fn new(opt: WalletOption) -> Result<Self> {
-        let wallet = ord::wallet::Wallet {
-            name: opt.name,
-            no_sync: opt.no_sync,
-            options: opt.chain_options,
-            ord_url: opt.server_url,
-        };
+        let ord_settings = ord::settings::Settings::load(opt.chain_options)?;
+        let wallet = ord::wallet::wallet_constructor::WalletConstructor::construct(
+            opt.name, 
+            opt.no_sync,
+            ord_settings,
+            opt.server_url,
+        )?;
+
         Ok(Self {
             ord_wallet: Arc::new(wallet),
         })
     }
 
-    pub fn bitcoin_client(&self) -> Result<bitcoincore_rpc::Client> {
-        self.ord_wallet.bitcoin_client()
+    pub fn bitcoin_client(&self) -> Result<&bitcoincore_rpc::Client> {
+        Ok(&self.ord_wallet.bitcoin_client)
     }
 
-    pub fn ord_client(&self) -> Result<reqwest::blocking::Client> {
-        self.ord_wallet.ord_client()
+    pub fn ord_client(&self) -> Result<&reqwest::blocking::Client> {
+        Ok(&self.ord_wallet.ord_client)
     }
 
     pub fn get_unspent_outputs(&self) -> Result<BTreeMap<OutPoint, TxOut>> {
-        self.ord_wallet.get_unspent_outputs()
+        let utxos = self.ord_wallet.utxos();
+
+        let mut outputs = BTreeMap::new();
+        for (outpoint, txout) in utxos.iter() {
+            outputs.insert(*outpoint, txout.clone());
+        }
+        
+        Ok(outputs)
     }
 
     pub fn get_output_sat_ranges(&self) -> Result<Vec<(OutPoint, Vec<(u64, u64)>)>> {
-        self.ord_wallet.get_output_sat_ranges()
+        self.ord_wallet.get_wallet_sat_ranges()
     }
 
     pub fn inscription_exists(&self, inscription_id: InscriptionId) -> Result<bool> {
@@ -73,29 +80,39 @@ impl Wallet {
     }
 
     pub fn get_inscriptions(&self) -> Result<BTreeMap<SatPoint, Vec<InscriptionId>>> {
-        self.ord_wallet.get_inscriptions()
+        let inscriptions = self.ord_wallet.inscriptions();
+
+        let mut outputs = BTreeMap::new();
+        for (satpoint, ids) in inscriptions.iter() {
+            outputs.insert(*satpoint, ids.clone());
+        }
+        
+        Ok(outputs)
     }
 
     pub fn get_inscription_satpoint(&self, inscription_id: InscriptionId) -> Result<SatPoint> {
-        self.ord_wallet.get_inscription_satpoint(inscription_id)
+        let inscriptions = self.ord_wallet.inscriptions();
+
+        for (satpoint, ids) in inscriptions.iter() {
+            if ids.contains(&inscription_id) {
+                return Ok(*satpoint)
+            }
+        }
+        
+        bail!("Inscription ID not found: {}", inscription_id);
     }
 
-    pub fn get_inscription(&self, inscription_id: InscriptionId) -> Result<InscriptionJson> {
-        let response = self
-            .ord_client()?
-            .get(
-                self.ord_wallet
-                    .ord_url
-                    .join(&format!("/inscription/{inscription_id}"))
-                    .unwrap(),
-            )
-            .send()?;
+    pub fn get_inscription(&self, inscription_id: InscriptionId) -> Result<ord::api::Inscription> {
+        let inscription_info = self.ord_wallet.inscription_info.get(&inscription_id);
 
-        if !response.status().is_success() {
-            bail!("inscription {inscription_id} not found");
+        match inscription_info {
+            Some(ins) => {
+                Ok(ins.clone())
+            }
+            None => {
+                bail!("Inscription ID not found: {}", inscription_id);
+            }
         }
-
-        Ok(serde_json::from_str(&response.text()?)?)
     }
 
     pub fn get_inscription_envelope(
@@ -127,11 +144,18 @@ impl Wallet {
     }
 
     pub fn get_locked_outputs(&self) -> Result<BTreeSet<OutPoint>> {
-        self.ord_wallet.get_locked_outputs()
+        let locked_utxos = self.ord_wallet.locked_utxos();
+
+        let mut outputs = BTreeSet::new();
+        for (outpoint, _) in locked_utxos.iter() {
+            outputs.insert(*outpoint);
+        }
+        
+        Ok(outputs)
     }
 
     pub fn get_primary_address(&self) -> Result<Address> {
-        let client = self.ord_wallet.bitcoin_client().unwrap();
+        let client = self.bitcoin_client()?;
         let address = client.get_new_address(None, Some(bitcoincore_rpc::json::AddressType::Bech32m))?;
 
         address.require_network(self.chain().network()).map_err(anyhow::Error::from)
@@ -141,12 +165,8 @@ impl Wallet {
         self.ord_wallet.get_change_address()
     }
 
-    pub fn get_server_status(&self) -> Result<StatusJson> {
-        self.ord_wallet.get_server_status()
-    }
-
     pub fn has_sat_index(&self) -> Result<bool> {
-        Ok(self.get_server_status()?.sat_index)
+        Ok(self.ord_wallet.has_sat_index)
     }
 
     pub fn chain(&self) -> Chain {
