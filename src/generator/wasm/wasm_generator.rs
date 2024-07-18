@@ -7,10 +7,10 @@ use std::sync::{Arc, Mutex};
 use wasmer::Value::I32;
 use wasmer::*;
 
-use tracing::{error, debug};
+use tracing::{debug, error};
 
-use crate::sft;
 use crate::generator::{Generator, InscribeGenerateOutput, InscribeSeed};
+use crate::sft;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -38,7 +38,10 @@ fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum:
     let mut written_bytes = 0;
 
     if let Some(memory_obj) = env.data().memory.clone() {
-        debug!("fd_write: fd:{}, iov:{}, iovcnt:{}, pnum:{}", _fd, iov, iovcnt, pnum);
+        debug!(
+            "fd_write: fd:{}, iov:{}, iovcnt:{}, pnum:{}",
+            _fd, iov, iovcnt, pnum
+        );
 
         let memory = memory_obj.lock().expect("getting memory mutex failed");
         let store_ref = env.as_store_ref();
@@ -61,12 +64,12 @@ fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum:
             let len = u32::from_le_bytes(temp_buffer);
 
             debug!("fd_write: _ptr:{}, len:{}", _ptr, len);
-            
+
             let mut buffer = vec![0u8; len as usize];
             memory_view
                 .read(_ptr as u64, &mut buffer)
                 .expect("read buffer from memory failed");
-            
+
             match _fd {
                 // stdout
                 1 => {
@@ -74,14 +77,14 @@ fn fd_write(env: FunctionEnvMut<Env>, _fd: i32, mut iov: i32, iovcnt: i32, pnum:
                     let stdout = io::stdout();
                     let mut handle = stdout.lock();
                     handle.write_all(&buffer).expect("write to stdout failed");
-                },
+                }
                 // stderr
                 2 => {
                     use std::io::{self, Write};
                     let stderr = io::stderr();
                     let mut handle = stderr.lock();
                     handle.write_all(&buffer).expect("write to stderr failed");
-                },
+                }
                 // Handle other file descriptors...
                 _ => unimplemented!(),
             }
@@ -131,7 +134,12 @@ fn proc_exit(_env: FunctionEnvMut<Env>, code: i32) {
     error!("program exit with {:}", code)
 }
 
-fn put_data_on_stack(memory: &mut Arc<Mutex<Memory>>, stack_alloc_func: &Function, store: &mut Store, data: &[u8]) -> i32 {
+fn put_data_on_stack(
+    memory: &mut Arc<Mutex<Memory>>,
+    stack_alloc_func: &Function,
+    store: &mut Store,
+    data: &[u8],
+) -> i32 {
     let data_len = data.len() as i32;
     let result = stack_alloc_func
         .call(store, vec![I32(data_len + 1)].as_slice())
@@ -172,12 +180,7 @@ fn create_wasm_instance(bytecode: &Vec<u8>) -> (Instance, Store) {
     let mut store = Store::default();
     let module = Module::new(&store, bytecode).unwrap();
 
-    let env = FunctionEnv::new(
-        &mut store,
-        Env {
-            memory: None,
-        },
-    );
+    let env = FunctionEnv::new(&mut store, Env { memory: None });
 
     let import_object = imports! {
         "wasi_snapshot_preview1" => {
@@ -233,10 +236,7 @@ impl WASMGenerator {
         buffer_map.insert("seed".to_string(), serde_json::Value::String(seed));
 
         if let Some(input) = user_input {
-            buffer_map.insert(
-                "user_input".to_string(),
-                serde_json::Value::String(input),
-            );
+            buffer_map.insert("user_input".to_string(), serde_json::Value::String(input));
         }
 
         let top_buffer_map = JSONValue::Object(buffer_map);
@@ -266,7 +266,14 @@ impl Generator for WASMGenerator {
         let memory_obj = instance.exports.get_memory("memory").unwrap();
         let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
 
-        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
+        let buffer_final_ptr = self.generate_buffer_final_ptr(
+            deploy_args,
+            seed,
+            user_input,
+            &mut memory,
+            stack_alloc_func,
+            &mut store,
+        );
 
         let func_args = vec![I32(buffer_final_ptr)];
 
@@ -323,11 +330,22 @@ impl Generator for WASMGenerator {
         let memory_obj = instance.exports.get_memory("memory").unwrap();
         let mut memory = Arc::new(Mutex::new(memory_obj.clone()));
 
-        let buffer_final_ptr = self.generate_buffer_final_ptr(deploy_args, seed, user_input, &mut memory, stack_alloc_func, &mut store);
+        let buffer_final_ptr = self.generate_buffer_final_ptr(
+            deploy_args,
+            seed,
+            user_input,
+            &mut memory,
+            stack_alloc_func,
+            &mut store,
+        );
 
         let inscribe_output_bytes = inscribe_output_to_cbor(inscribe_output);
-        let inscribe_output_final_ptr =
-            put_data_on_stack(&mut memory, stack_alloc_func, &mut store, inscribe_output_bytes.as_slice());
+        let inscribe_output_final_ptr = put_data_on_stack(
+            &mut memory,
+            stack_alloc_func,
+            &mut store,
+            inscribe_output_bytes.as_slice(),
+        );
 
         let func_args = vec![I32(buffer_final_ptr), I32(inscribe_output_final_ptr)];
 
@@ -388,15 +406,12 @@ fn inscribe_output_to_cbor(inscribe_output: InscribeGenerateOutput) -> Vec<u8> {
 
     // Add attributes to the map if they exist
     if let Some(attributes) = inscribe_output.attributes {
-        map.push((
-            ciborium::Value::Text("attributes".to_string()),
-            attributes,
-        ));
+        map.push((ciborium::Value::Text("attributes".to_string()), attributes));
     }
 
     // Add content to the map if it exists
     let mut content_map = Vec::new();
-    
+
     if let Some(content) = inscribe_output.content {
         content_map.push((
             ciborium::Value::Text("content_type".to_string()),
@@ -415,22 +430,23 @@ fn inscribe_output_to_cbor(inscribe_output: InscribeGenerateOutput) -> Vec<u8> {
 
     // Serialize the map to CBOR bytes
     let mut buffer = Vec::new();
-    ciborium::ser::into_writer(&ciborium::Value::Map(map), &mut buffer).expect("Failed to serialize to CBOR");
+    ciborium::ser::into_writer(&ciborium::Value::Map(map), &mut buffer)
+        .expect("Failed to serialize to CBOR");
     buffer
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::generator::Content;
+    use crate::operation::deploy_args_cbor_encode;
     use bitcoin::hashes::sha256d;
     use bitcoin::{Address, Network};
     use bitcoin::{BlockHash, Txid};
+    use env_logger;
     use std::fs::read;
     use std::str::FromStr;
-    use env_logger;
-    use crate::operation::deploy_args_cbor_encode;
-    use crate::generator::Content;
-     
+
     #[test]
     fn test_inscribe_generate_normal() {
         env_logger::init();
@@ -439,7 +455,8 @@ mod tests {
         let bytecode = read("./generator/cpp/generator.wasm").expect("failed to read WASM file");
         let generator = WASMGenerator::new(bytecode);
 
-        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args =
+            vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
         let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
@@ -458,8 +475,10 @@ mod tests {
         };
 
         // Recipient
-        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
-            .require_network(Network::Bitcoin).unwrap();
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf")
+            .unwrap()
+            .require_network(Network::Bitcoin)
+            .unwrap();
 
         // User input
         let user_input = Some("test user input".to_string());
@@ -491,7 +510,8 @@ mod tests {
         let bytecode = read("./generator/cpp/generator.wasm").expect("failed to read WASM file");
         let generator = WASMGenerator::new(bytecode);
 
-        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args =
+            vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
         let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
@@ -510,17 +530,21 @@ mod tests {
         };
 
         // Recipient
-        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
-            .require_network(Network::Bitcoin).unwrap();
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf")
+            .unwrap()
+            .require_network(Network::Bitcoin)
+            .unwrap();
 
         // User input
         let user_input = Some("test user input".to_string());
 
         // Generate output using inscribe_generate
-        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
+        let output =
+            generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
 
         // Verify the generated output using inscribe_verify
-        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
+        let is_valid =
+            generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
 
         // Add assertion to check if the output is valid
         assert!(is_valid, "The inscribe output should be valid");
@@ -529,10 +553,12 @@ mod tests {
     #[test]
     fn test_inscribe_verify_for_rust() {
         // Read WASM binary from file
-        let bytecode = read("./generator/rust/pkg/generator_bg.wasm").expect("failed to read WASM file");
+        let bytecode =
+            read("./generator/rust/pkg/generator_bg.wasm").expect("failed to read WASM file");
         let generator = WASMGenerator::new(bytecode);
 
-        let deploy_args = vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
+        let deploy_args =
+            vec![r#"{"height":{"type":"range","data":{"min":1,"max":1000}}}"#.to_string()];
         let deploy_args = deploy_args_cbor_encode(deploy_args);
 
         // Block hash
@@ -551,17 +577,21 @@ mod tests {
         };
 
         // Recipient
-        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf").unwrap()
-            .require_network(Network::Bitcoin).unwrap();
+        let recipient: Address = Address::from_str("32iVBEu4dxkUQk9dJbZUiBiQdmypcEyJRf")
+            .unwrap()
+            .require_network(Network::Bitcoin)
+            .unwrap();
 
         // User input
         let user_input = Some("test user input".to_string());
 
         // Generate output using inscribe_generate
-        let output = generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
+        let output =
+            generator.inscribe_generate(&deploy_args, &seed, &recipient, user_input.clone());
 
         // Verify the generated output using inscribe_verify
-        let is_valid = generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
+        let is_valid =
+            generator.inscribe_verify(&deploy_args, &seed, &recipient, user_input, output);
 
         // Add assertion to check if the output is valid
         assert!(is_valid, "The inscribe output should be valid");
@@ -580,14 +610,12 @@ mod tests {
         ));
 
         let output = InscribeGenerateOutput {
-            amount: 1, 
-            attributes: Some(ciborium::Value::Map(attributes)), 
-            content: Some(
-                Content { 
-                    content_type: "text/plain".to_string(), 
-                    body: vec![104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33]
-                }
-            ) 
+            amount: 1,
+            attributes: Some(ciborium::Value::Map(attributes)),
+            content: Some(Content {
+                content_type: "text/plain".to_string(),
+                body: vec![104, 101, 108, 108, 111, 32, 119, 111, 114, 108, 100, 33],
+            }),
         };
 
         let cbor_bytes = inscribe_output_to_cbor(output);
@@ -609,8 +637,8 @@ mod tests {
         ));
 
         let output = InscribeGenerateOutput {
-            amount: 1, 
-            attributes: Some(ciborium::Value::Map(attributes)), 
+            amount: 1,
+            attributes: Some(ciborium::Value::Map(attributes)),
             content: None,
         };
 

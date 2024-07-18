@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use testcontainers::{
-    core::{WaitFor, ContainerState, ExecCommand}, 
+    core::{ContainerState, ExecCommand, WaitFor},
     Image, ImageArgs,
 };
 
@@ -59,8 +59,8 @@ impl Image for Ord {
     }
 
     fn exec_after_start(&self, _cs: ContainerState) -> Vec<ExecCommand> {
-        vec![ExecCommand{
-            cmd:  "/bin/rm -rf /data/.bitcoin/regtest/wallets/ord".to_owned(),
+        vec![ExecCommand {
+            cmd: "/bin/rm -rf /data/.bitcoin/regtest/wallets/ord".to_owned(),
             ready_conditions: vec![WaitFor::Nothing],
         }]
     }

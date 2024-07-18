@@ -9,10 +9,10 @@ use ord::InscriptionId;
 pub struct SplitCommand {
     #[arg(long, help = "The split SFT inscription ID.")]
     sft_inscription_id: InscriptionId,
-    
+
     #[arg(long, help = "The split amounts.", num_args = 1..)]
     amounts: Vec<u64>,
-    
+
     #[clap(flatten)]
     inscribe_options: InscribeOptions,
 }

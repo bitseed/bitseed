@@ -4,8 +4,8 @@ use clap::Parser;
 use ord::InscriptionId;
 
 use {
-  anyhow::bail,
-  crate::operation::{AsSFT, Operation}
+    crate::operation::{AsSFT, Operation},
+    anyhow::bail,
 };
 
 #[derive(Debug, Parser)]
@@ -21,7 +21,10 @@ impl ViewCommand {
             Operation::Mint(mint_record) => mint_record.as_sft(),
             Operation::Split(split_record) => split_record.as_sft(),
             Operation::Merge(merge_record) => merge_record.as_sft(),
-            _ => bail!("Inscription {} is not a valid SFT record", self.sft_inscription_id),
+            _ => bail!(
+                "Inscription {} is not a valid SFT record",
+                self.sft_inscription_id
+            ),
         };
 
         Ok(Box::new(sft))
