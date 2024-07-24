@@ -2,6 +2,10 @@
 
 Bitseed aims to extend the capabilities of the Ordinals protocol, making Inscriptions more conveniently applicable in Fully On-Chain Games and Autonomous Worlds. The Bitseed protocol is inspired by various inscription protocols, including but not limited to BRC20, BRC420, BRC1024, CBRC-20, etc., paying homage to the pioneers.
 
+* Bitseed is a extension framework for the Ordinals metaprotocol.
+* Bitseed is also an SFT (Semi-Fungible Token) asset format standard.
+* Bitseed is also an asset protocol that supports the leaping between Bitcoin and L2.
+
 ## The World Originates from a Seed
 
 We believe that any game world can be generated through a Generator and a Seed. This Seed, formed by the hash values of Bitcoin blocks and transactions, ensures that each generated world is unique. Moreover, Bitcoin's UTXO mechanism guarantees that this Seed can only be used once. We can leverage the Seed provided by Bitcoin to generate assets, props, characters, and worlds within the game.
@@ -14,9 +18,10 @@ The field mapping from Bitseed SFT to Ordinals Inscription is as follows:
 
 | SFT                   | Ord Inscription            | Type        | Range                       | Required |
 | --------------------- | -------------------------- |------------|----------------------------|----------|
-| protocol              | metaprotocol               | String     | bitseed                    | true     |
+| protocol              | metaprotocol               | String     | metaprotocol name, eg. bitseed| true     |
 | op                    | metadata.op                | String     | deploy, mint, split, merge | true     |
-| tick                  | metadata.tick              | String     | printable ASCII char       | true     |          
+| tick                  | metadata.tick              | String     | printable ASCII char       | true     |
+| bid                   | metadata.bid               | String     | 32 bytes hash              | true    |               
 | amount                | metadata.amount            | u64        | 1-u64::max()               | true     |
 | attributes            | metadata.attributes        | Map        |                            | false    |
 | content.content_type  | content_type               | String     |                            | false    |
