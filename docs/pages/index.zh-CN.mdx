@@ -3,6 +3,10 @@
 
 Bitseed 尝试给 Ordinals 协议提供扩展能力，让 Inscription 更方便的在全链游戏以及自主世界（Autonomous World）中使用。Bitseed 协议受到了各种铭文协议的启发，包括但不限于 BRC20， BRC420，BRC1024，CBRC-20 等，向先行者致敬。
 
+* Bitseed 是一个 Ordinals metaprotocol 扩展框架。
+* Bitseed 也是一种 SFT（Semi-Fungible Token） 资产标准。
+* Bitseed 还是一种支持在 Bitcoin 和 L2 之间跃迁的资产协议。
+
 ## 世界源于种子（seed）
 
 我们认为任何游戏世界都可以通过一个生成器（Generator）和一个种子（Seed）来生成。这个种子，由比特币区块的哈希值和交易的哈希值共同构成，确保了每个生成的世界都是独一无二的，并且 Bitcoin 的 UTXO 机制保证了这个种子只能使用一次。我们可以利用 Bitcoin 提供的种子，去生成游戏中的资产，道具，角色，以及世界。
@@ -15,9 +19,10 @@ Bitseed SFT 到 Inscription 的字段映射关系如下：
 
 | SFT                   | Ord Inscription            | 类型        |范围                        | 必须字段  |
 | --------------------- | -------------------------- |------------|----------------------------|---------|
-|protocol               | metaprotocol               | String     | bitseed                    | true    |
+|protocol               | metaprotocol               | String     | metaprotocol name, eg. bitseed | true    |
 |op                     | metadata.op                | String     | deploy,mint,split,merge    | true    |
-|tick                   | metadata.tick              | String     | printable ASCII char       | true    |          
+|tick                   | metadata.tick              | String     | printable ASCII char       | true    |
+|bid                    | metadata.bid               | String     | 32 bytes hash              | true    |          
 |amount                 | metadata.amount            | u64        | 1-u64::max()               | true    |
 |attributes             | metadata.attributes        | Map        |                            | false   |
 |content.content_type    | content_type               | String     |                            | false   |
