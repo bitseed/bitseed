@@ -54,7 +54,7 @@ pub enum Commands {
     Mint(commands::mint::MintCommand),
     Split(commands::split::SplitCommand),
     Merge(commands::merge::MergeCommand),
-    View(commands::view::ViewCommand)
+    View(commands::view::ViewCommand),
 }
 
 pub fn run(cli: BitseedCli) -> SubcommandResult {
@@ -67,6 +67,6 @@ pub fn run(cli: BitseedCli) -> SubcommandResult {
         Commands::Merge(merge) => merge.run(wallet),
         Commands::View(view) => view.run(wallet),
     }?;
-    
+
     Ok(output)
 }

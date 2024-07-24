@@ -20,7 +20,8 @@ pub struct DeployRecord {
     pub tick: String,
     // The total supply of the Inscription
     pub amount: u64,
-    pub generator: String,
+    pub generator: Option<String>,
+    pub factory: Option<String>,
     pub repeat: u64,
     pub deploy_args: Vec<u8>,
 }
@@ -29,7 +30,8 @@ impl DeployRecord {
     pub fn new_deploy_record(
         tick: String,
         amount: u64,
-        generator: String,
+        generator: Option<String>,
+        factory: Option<String>,
         repeat: u64,
         deploy_args: Vec<u8>,
     ) -> Self {
@@ -37,6 +39,7 @@ impl DeployRecord {
             tick,
             amount,
             generator,
+            factory,
             repeat,
             deploy_args,
         }
@@ -92,20 +95,23 @@ impl Operation {
                 let cursor = Cursor::new(record.deploy_args);
                 let cbor_value: Value = ciborium::from_reader(cursor).unwrap();
 
-                let attributes = ciborium::Value::Map(vec![
-                    (
-                        Value::Text("generator".to_string()),
-                        Value::Text(record.generator.clone()),
-                    ),
-                    (
-                        Value::Text("repeat".to_string()),
-                        Value::Integer(record.repeat.into()),
-                    ),
-                    (
-                        Value::Text("deploy_args".to_string()),
-                        cbor_value,
-                    ),
-                ]);
+                let mut att_values = vec![];
+                if let Some(generator) = record.generator {
+                    att_values.push((Value::Text("generator".to_string()), Value::Text(generator)));
+                }
+
+                if let Some(factory) = record.factory {
+                    att_values.push((Value::Text("factory".to_string()), Value::Text(factory)));
+                }
+
+                att_values.push((
+                    Value::Text("repeat".to_string()),
+                    Value::Integer(record.repeat.into()),
+                ));
+
+                att_values.push((Value::Text("deploy_args".to_string()), cbor_value));
+
+                let attributes = ciborium::Value::Map(att_values);
                 InscriptionBuilder::new()
                     .op(op.clone())
                     .tick(record.tick.clone())
@@ -166,10 +172,17 @@ impl Operation {
             "deploy" => {
                 let generator = bitseed_inscription
                     .get_attribute("generator")
-                    .ok_or_else(|| anyhow!("missing generator"))?
-                    .as_text()
-                    .ok_or_else(|| anyhow!("generator is not a string"))?
-                    .to_string();
+                    .map(|v| v.as_text().map(|txt| txt.to_owned()))
+                    .flatten();
+                let factory = bitseed_inscription
+                    .get_attribute("factory")
+                    .map(|v| v.as_text().map(|txt| txt.to_owned()))
+                    .flatten();
+                match (&generator, &factory) {
+                    (Some(_), Some(_)) => bail!("generator and factory are mutually exclusive"),
+                    (None, None) => bail!("missing generator or factory"),
+                    _ => {}
+                }
                 let repeat = bitseed_inscription
                     .get_attribute("repeat")
                     .ok_or_else(|| anyhow!("missing repeat"))?
@@ -179,14 +192,16 @@ impl Operation {
                 let deploy_args_value = bitseed_inscription
                     .get_attribute("deploy_args")
                     .ok_or_else(|| anyhow!("missing deploy_args"))?;
-                   
+
                 let mut deploy_args = Vec::new();
-                ciborium::into_writer(&deploy_args_value, &mut deploy_args).expect("ciborium marshal failed");
+                ciborium::into_writer(&deploy_args_value, &mut deploy_args)
+                    .expect("ciborium marshal failed");
 
                 Ok(Operation::Deploy(DeployRecord::new_deploy_record(
                     tick,
                     amount,
                     generator,
+                    factory,
                     repeat,
                     deploy_args,
                 )))
@@ -199,14 +214,14 @@ impl Operation {
                     attributes,
                     content,
                 };
-                
+
                 let op = match op.as_ref() {
                     "mint" => Operation::Mint(MintRecord { sft }),
                     "split" => Operation::Split(SplitRecord { sft }),
                     "merge" => Operation::Merge(MergeRecord { sft }),
                     _ => unreachable!(), // We already know it's one of the three.
                 };
-        
+
                 Ok(op)
             }
             _ => {

@@ -3,22 +3,26 @@ mod images;
 use std::panic;
 use std::time::Duration;
 
-use std::thread;
 use std::sync::mpsc;
+use std::thread;
 
 use anyhow::{bail, Result};
+use bitseed::BitseedCli;
 use clap::Parser;
 use cucumber::{given, then, World as _};
 use jpst::TemplateContext;
 use serde_json::Value;
-use testcontainers::{clients::Cli, core::{ WaitFor, Container, ExecCommand}, RunnableImage};
-use tracing::{Level, error, debug, info};
+use testcontainers::{
+    clients::Cli,
+    core::{Container, ExecCommand, WaitFor},
+    RunnableImage,
+};
+use tracing::{debug, error, info, Level};
 use tracing_subscriber;
-use bitseed::BitseedCli;
 
-use uuid::Uuid;
 use images::bitcoin::BitcoinD;
 use images::ord::Ord;
+use uuid::Uuid;
 
 const RPC_USER: &str = "roochuser";
 const RPC_PASS: &str = "roochpass";
@@ -61,7 +65,8 @@ async fn prepare_bitcoind_and_ord(w: &mut World) {
         format!("0.0.0.0:{}", RPC_PORT),
         RPC_USER.to_string(),
         RPC_PASS.to_string(),
-    ).into();
+    )
+    .into();
     bitcoind_image = bitcoind_image
         .with_network(network.clone())
         .with_run_option(("--network-alias", "bitcoind"));
@@ -114,9 +119,7 @@ async fn release_bitcoind_and_ord(w: &mut World) {
 fn ord_bash_run_cmd(w: &mut World, input_tpl: String) {
     let ord = w.ord.as_ref().unwrap();
 
-    let mut bitseed_args = vec![
-        "/bin/bash".to_string(),
-    ];
+    let mut bitseed_args = vec!["/bin/bash".to_string()];
 
     if w.tpl_ctx.is_none() {
         let tpl_ctx = TemplateContext::new();
@@ -133,8 +136,8 @@ fn ord_bash_run_cmd(w: &mut World, input_tpl: String) {
     let joined_args = bitseed_args.join(" ");
     debug!("run cmd: ord {}", joined_args);
 
-    let exec_cmd = ExecCommand{
-        cmd:  joined_args,
+    let exec_cmd = ExecCommand {
+        cmd: joined_args,
         ready_conditions: vec![WaitFor::Nothing],
     };
 
@@ -163,7 +166,9 @@ fn ord_bash_run_cmd(w: &mut World, input_tpl: String) {
         panic!("Command execution failed with errors: {}", stderr_string);
     }
 
-    tpl_ctx.entry(format!("{}", cmd_name)).append::<String>(stdout_string);
+    tpl_ctx
+        .entry(format!("{}", cmd_name))
+        .append::<String>(stdout_string);
 
     debug!("current tpl_ctx: {:?}", tpl_ctx);
 }
@@ -195,8 +200,8 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
     let joined_args = bitseed_args.join(" ");
     debug!("run cmd: ord {}", joined_args);
 
-    let exec_cmd = ExecCommand{
-        cmd:  joined_args,
+    let exec_cmd = ExecCommand {
+        cmd: joined_args,
         ready_conditions: vec![WaitFor::Nothing],
     };
 
@@ -240,10 +245,7 @@ fn ord_run_cmd(w: &mut World, input_tpl: String) {
 fn bitcoincli_run_cmd(w: &mut World, input_tpl: String) {
     let bitcoind = w.bitcoind.as_ref().unwrap();
 
-    let mut bitcoincli_args = vec![
-        "bitcoin-cli".to_string(),
-        "-regtest".to_string(),
-    ];
+    let mut bitcoincli_args = vec!["bitcoin-cli".to_string(), "-regtest".to_string()];
 
     if w.tpl_ctx.is_none() {
         let tpl_ctx = TemplateContext::new();
@@ -260,8 +262,8 @@ fn bitcoincli_run_cmd(w: &mut World, input_tpl: String) {
     let joined_args = bitcoincli_args.join(" ");
     debug!("run cmd: {}", joined_args);
 
-    let exec_cmd = ExecCommand{
-        cmd:  joined_args,
+    let exec_cmd = ExecCommand {
+        cmd: joined_args,
         ready_conditions: vec![WaitFor::Nothing],
     };
 
@@ -339,7 +341,7 @@ async fn bitseed_run_cmd(w: &mut World, input_tpl: String) {
         let result = std::panic::catch_unwind(|| {
             let mut opts = BitseedCli::parse_from(bitseed_args);
             opts.wallet_options.chain_options.regtest = true;
-            
+
             bitseed::run(opts)
         });
 

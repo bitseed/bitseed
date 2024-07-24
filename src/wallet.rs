@@ -41,7 +41,7 @@ impl Wallet {
     pub fn new(opt: WalletOption) -> Result<Self> {
         let ord_settings = ord::settings::Settings::load(opt.chain_options)?;
         let wallet = ord::wallet::wallet_constructor::WalletConstructor::construct(
-            opt.name, 
+            opt.name,
             opt.no_sync,
             ord_settings,
             opt.server_url,
@@ -67,7 +67,7 @@ impl Wallet {
         for (outpoint, txout) in utxos.iter() {
             outputs.insert(*outpoint, txout.clone());
         }
-        
+
         Ok(outputs)
     }
 
@@ -86,7 +86,7 @@ impl Wallet {
         for (satpoint, ids) in inscriptions.iter() {
             outputs.insert(*satpoint, ids.clone());
         }
-        
+
         Ok(outputs)
     }
 
@@ -95,10 +95,10 @@ impl Wallet {
 
         for (satpoint, ids) in inscriptions.iter() {
             if ids.contains(&inscription_id) {
-                return Ok(*satpoint)
+                return Ok(*satpoint);
             }
         }
-        
+
         bail!("Inscription ID not found: {}", inscription_id);
     }
 
@@ -106,9 +106,7 @@ impl Wallet {
         let inscription_info = self.ord_wallet.inscription_info.get(&inscription_id);
 
         match inscription_info {
-            Some(ins) => {
-                Ok(ins.clone())
-            }
+            Some(ins) => Ok(ins.clone()),
             None => {
                 bail!("Inscription ID not found: {}", inscription_id);
             }
@@ -121,21 +119,24 @@ impl Wallet {
     ) -> Result<ord::Envelope<ord::Inscription>> {
         let tx = self.get_raw_transaction(&inscription_id.txid)?;
         let inscriptions = ParsedEnvelope::from_transaction(&tx);
-        
+
         let envelope = inscriptions
             .into_iter()
             .nth(inscription_id.index as usize)
             .ok_or_else(|| anyhow!("Inscription not found in the transaction"))?;
-        
+
         Ok(envelope)
     }
 
     pub fn get_inscription_satpoint_v2(&self, inscription_id: InscriptionId) -> Result<SatPoint> {
         let envelope = self.get_inscription_envelope(inscription_id)?;
 
-        Ok(SatPoint{
-            outpoint: OutPoint { txid: inscription_id.txid, vout: envelope.input },
-            offset: envelope.offset as u64
+        Ok(SatPoint {
+            outpoint: OutPoint {
+                txid: inscription_id.txid,
+                vout: envelope.input,
+            },
+            offset: envelope.offset as u64,
         })
     }
 
@@ -150,15 +151,18 @@ impl Wallet {
         for (outpoint, _) in locked_utxos.iter() {
             outputs.insert(*outpoint);
         }
-        
+
         Ok(outputs)
     }
 
     pub fn get_primary_address(&self) -> Result<Address> {
         let client = self.bitcoin_client()?;
-        let address = client.get_new_address(None, Some(bitcoincore_rpc::json::AddressType::Bech32m))?;
+        let address =
+            client.get_new_address(None, Some(bitcoincore_rpc::json::AddressType::Bech32m))?;
 
-        address.require_network(self.chain().network()).map_err(anyhow::Error::from)
+        address
+            .require_network(self.chain().network())
+            .map_err(anyhow::Error::from)
     }
 
     pub fn get_change_address(&self) -> Result<Address> {
@@ -211,12 +215,12 @@ impl Wallet {
     ) -> Result<Operation> {
         let tx = self.get_raw_transaction(&inscription_id.txid)?;
         let inscriptions = ParsedEnvelope::from_transaction(&tx);
-        
+
         let envelope = inscriptions
             .into_iter()
             .nth(inscription_id.index as usize)
             .ok_or_else(|| anyhow!("Inscription not found in the transaction"))?;
-        
+
         Operation::from_inscription(envelope.payload)
     }
 
@@ -224,7 +228,7 @@ impl Wallet {
         &self,
         tx: R,
         maxfeerate: Option<f64>,
-        maxburnamount: Option<f64>
+        maxburnamount: Option<f64>,
     ) -> Result<bitcoin::Txid> {
         let bitcoin_client = self.bitcoin_client()?;
 
